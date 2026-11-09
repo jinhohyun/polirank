@@ -1,0 +1,166 @@
+/* PoliRank Custom Styles & Animations - 6 Key Metrics & 3D Flip */
+
+/* Glassmorphism Classes */
+.glass-card {
+    background: rgba(255, 255, 255, 0.88);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.08);
+}
+
+.dark .glass-card {
+    background: rgba(30, 41, 59, 0.88);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.45);
+}
+
+.glass-nav {
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.dark .glass-nav {
+    background: rgba(15, 23, 42, 0.94);
+    border-bottom: 1px solid rgba(51, 65, 85, 0.8);
+}
+
+/* Card Hover 3D Micro-interaction */
+.member-card {
+    transition: all 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.member-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.12), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.dark .member-card:hover {
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.45), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
+}
+
+/* 3D Flip Box for Avatar (Caricature <-> Real Photo) */
+.flip-box {
+    perspective: 1000px;
+}
+
+.flip-box-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    transform-style: preserve-3d;
+}
+
+.flip-box.is-flipped .flip-box-inner {
+    transform: rotateY(180deg);
+}
+
+.flip-box-front,
+.flip-box-back {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    border-radius: 1rem;
+    overflow: hidden;
+}
+
+.flip-box-back {
+    transform: rotateY(180deg);
+}
+
+/* Rank Medals Special Glow */
+.rank-1-badge {
+    background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+    box-shadow: 0 0 16px rgba(255, 215, 0, 0.65);
+}
+
+.rank-2-badge {
+    background: linear-gradient(135deg, #E0E0E0 0%, #9E9E9E 100%);
+    box-shadow: 0 0 12px rgba(158, 158, 158, 0.5);
+}
+
+.rank-3-badge {
+    background: linear-gradient(135deg, #CD7F32 0%, #8D5524 100%);
+    box-shadow: 0 0 10px rgba(205, 127, 50, 0.5);
+}
+
+/* Quote Bubble */
+.quote-bubble {
+    position: relative;
+    background: rgba(241, 245, 249, 0.85);
+    border: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.dark .quote-bubble {
+    background: rgba(15, 23, 42, 0.65);
+    border: 1px solid rgba(51, 65, 85, 0.6);
+}
+
+/* Floating Heart Animation for Cheer */
+@keyframes floatUp {
+    0% {
+        opacity: 1;
+        transform: translateY(0) scale(0.8);
+    }
+    50% {
+        opacity: 0.95;
+        transform: translateY(-28px) scale(1.25);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-56px) scale(1.4);
+    }
+}
+
+.floating-heart {
+    position: absolute;
+    pointer-events: none;
+    animation: floatUp 0.85s ease-out forwards;
+    z-index: 50;
+    color: #EF4444;
+    font-size: 1.3rem;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #CBD5E1;
+    border-radius: 9999px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+    background: #475569;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #94A3B8;
+}
+
+/* Toast Animation */
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.toast-animate {
+    animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
