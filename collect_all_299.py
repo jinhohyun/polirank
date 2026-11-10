@@ -439,28 +439,43 @@ def fetch_legislation_for_all(
     name_counts = Counter(m["HG_NM"] for m in raw_members)
     unique_names = sorted(name_counts.keys())
 
-    def _fetch_name_bills(name: str) -> Tuple[str, Dict[str, Any]]:
-        res_total = fetch_json_with_retry(sess, EP_BILLS, {"Type": "json", "AGE": "22", "PROPOSER": name})
-        res_orig = fetch_json_with_retry(sess, EP_BILLS, {"Type": "json", "AGE": "22", "PROPOSER": name, "PROC_RESULT": "원안가결"})
-        res_amend = fetch_json_with_retry(sess, EP_BILLS, {"Type": "json", "AGE": "22", "PROPOSER": name, "PROC_RESULT": "수정가결"})
-        res_alt = fetch_json_with_retry(sess, EP_BILLS, {"Type": "json", "AGE": "22", "PROPOSER": name, "PROC_RESULT": "대안반영폐기"})
-
-        def _extract_cnt(data: Optional[Dict[str, Any]]) -> int:
+    def _fetch_exact_proposer_stats(name: str, proc_result: Optional[str] = None) -> Tuple[int, List[Dict[str, Any]]]:
+        """부분문자열 오염 방지를 위해 '{이름}의원' 및 공동대표발의 '{이름}ㆍ' 합산 조회"""
+        total_cnt = 0
+        collected_rows: List[Dict[str, Any]] = []
+        seen_bill_ids: Set[str] = set()
+        for suffix in ("의원", "ㆍ"):
+            params: Dict[str, Any] = {"Type": "json", "AGE": "22", "PROPOSER": f"{name}{suffix}"}
+            if proc_result:
+                params["PROC_RESULT"] = proc_result
+            data = fetch_json_with_retry(sess, EP_BILLS, params)
             if data and "nzmimeepazxkubdpn" in data:
                 head = data["nzmimeepazxkubdpn"][0].get("head", [])
-                return int(head[0].get("list_total_count", 0)) if head else 0
-            return 0
+                cnt = int(head[0].get("list_total_count", 0)) if head else 0
+                total_cnt += cnt
+                if len(data["nzmimeepazxkubdpn"]) > 1:
+                    for row in data["nzmimeepazxkubdpn"][1].get("row", []):
+                        bid = row.get("BILL_ID")
+                        if bid and bid not in seen_bill_ids:
+                            seen_bill_ids.add(bid)
+                            collected_rows.append(row)
+        return total_cnt, collected_rows
 
-        rows = []
-        if res_total and "nzmimeepazxkubdpn" in res_total:
-            rows = res_total["nzmimeepazxkubdpn"][1].get("row", [])
+    def _fetch_name_bills(name: str) -> Tuple[str, Dict[str, Any]]:
+        tot_cnt, rows = _fetch_exact_proposer_stats(name)
+        orig_cnt, orig_rows = _fetch_exact_proposer_stats(name, "원안가결")
+        amend_cnt, amend_rows = _fetch_exact_proposer_stats(name, "수정가결")
+        alt_cnt, alt_rows = _fetch_exact_proposer_stats(name, "대안반영폐기")
 
         return name, {
-            "total": _extract_cnt(res_total),
-            "orig": _extract_cnt(res_orig),
-            "amend": _extract_cnt(res_amend),
-            "alt": _extract_cnt(res_alt),
+            "total": tot_cnt,
+            "orig": orig_cnt,
+            "amend": amend_cnt,
+            "alt": alt_cnt,
             "rows": rows,
+            "orig_rows": orig_rows,
+            "amend_rows": amend_rows,
+            "alt_rows": alt_rows,
         }
 
     by_name: Dict[str, Dict[str, Any]] = {}
@@ -497,9 +512,10 @@ def fetch_legislation_for_all(
             tot_w = sum(weights.values()) or 1
             ratio = weights.get(mona, 1) / tot_w
             bills_proposed = max(1 if base["total"] > 0 else 0, round(base["total"] * ratio))
-            passed_original = round(base["orig"] * ratio)
-            passed_amended = round(base["amend"] * ratio)
-            alt_incorporated = round(base["alt"] * ratio)
+            # 원안/수정/대안반영 건수가 5건 이하라 rows에 전수 포함된 경우 실제 RST_MONA_CD 100% 카운트 적용
+            passed_original = sum(1 for r in base["orig_rows"] if r.get("RST_MONA_CD") == mona) if len(base["orig_rows"]) >= base["orig"] else round(base["orig"] * ratio)
+            passed_amended = sum(1 for r in base["amend_rows"] if r.get("RST_MONA_CD") == mona) if len(base["amend_rows"]) >= base["amend"] else round(base["amend"] * ratio)
+            alt_incorporated = sum(1 for r in base["alt_rows"] if r.get("RST_MONA_CD") == mona) if len(base["alt_rows"]) >= base["alt"] else round(base["alt"] * ratio)
             filtered_rows = [r for r in base["rows"] if r.get("RST_MONA_CD") == mona]
             if not filtered_rows:
                 filtered_rows = base["rows"]
@@ -508,7 +524,7 @@ def fetch_legislation_for_all(
             passed_original = base["orig"]
             passed_amended = base["amend"]
             alt_incorporated = base["alt"]
-            filtered_rows = base["rows"]
+            filtered_rows = [r for r in base["rows"] if r.get("RST_MONA_CD") == mona] or base["rows"]
 
         recent_bills = []
         for r in filtered_rows[:3]:

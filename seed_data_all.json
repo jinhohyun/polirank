@@ -5005,13 +5005,13 @@
       ],
       "media_mentions": 2319,
       "weekly_stats": {
-        "bills_proposed": 91,
+        "bills_proposed": 68,
         "bills_cosponsored": 182,
         "passed_original": 0,
-        "passed_amended": 5,
-        "alt_incorporated": 36,
-        "bills_passed": 5,
-        "subcommittee_passed": 36,
+        "passed_amended": 2,
+        "alt_incorporated": 23,
+        "bills_passed": 2,
+        "subcommittee_passed": 23,
         "voting_rate": 70.0,
         "votes_participated": 7,
         "votes_eligible": 10,
@@ -6709,13 +6709,13 @@
       ],
       "media_mentions": 3835,
       "weekly_stats": {
-        "bills_proposed": 163,
+        "bills_proposed": 40,
         "bills_cosponsored": 326,
-        "passed_original": 5,
-        "passed_amended": 5,
-        "alt_incorporated": 32,
-        "bills_passed": 10,
-        "subcommittee_passed": 32,
+        "passed_original": 1,
+        "passed_amended": 4,
+        "alt_incorporated": 11,
+        "bills_passed": 5,
+        "subcommittee_passed": 11,
         "voting_rate": 100.0,
         "votes_participated": 10,
         "votes_eligible": 10,
@@ -6735,31 +6735,31 @@
         "disciplinary_action": false,
         "recent_bills": [
           {
-            "bill_no": "2222236",
-            "bill_name": "지방자치법 일부개정법률안",
-            "proposed_date": "2026-10-29",
-            "committee": "행정안전위원회",
+            "bill_no": "2221373",
+            "bill_name": "언론중재 및 피해구제 등에 관한 법률 일부개정법률안",
+            "proposed_date": "2026-09-14",
+            "committee": "문화체육관광위원회",
             "status": "위원회 심사중",
-            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_E0BB2239CA39430896E0FE5B188EE7&ageFrom=22&ageTo=22",
-            "summary": "의안번호 2222236 · 행정안전위원회 (위원회 심사중)"
+            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_I2H6H0G9G0O7N1N6L1M1K1L8T9R9S5&ageFrom=22&ageTo=22",
+            "summary": "의안번호 2221373 · 문화체육관광위원회 (위원회 심사중)"
           },
           {
-            "bill_no": "2221574",
-            "bill_name": "사법경찰관리의 직무를 수행할 자와 그 직무범위에 관한 법률 일부개정법률안",
-            "proposed_date": "2026-09-23",
-            "committee": "법제사법위원회",
-            "status": "위원회 심사중",
-            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_L2M6K0J9J1R7S1Q7R4P2N3O1W6X4V5&ageFrom=22&ageTo=22",
-            "summary": "의안번호 2221574 · 법제사법위원회 (위원회 심사중)"
+            "bill_no": "2219778",
+            "bill_name": "정보통신망 이용촉진 및 정보보호 등에 관한 법률 일부개정법률안",
+            "proposed_date": "2026-07-06",
+            "committee": "과학기술정보방송통신위원회",
+            "status": "철회",
+            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_G2G6E0D6E2L5M1K7L4J8K1I0Q5R1P0&ageFrom=22&ageTo=22",
+            "summary": "의안번호 2219778 · 과학기술정보방송통신위원회 (철회)"
           },
           {
-            "bill_no": "2221573",
-            "bill_name": "부동산감독원 설치 및 운영에 관한 법률안",
-            "proposed_date": "2026-09-23",
-            "committee": "정무위원회",
-            "status": "위원회 심사중",
-            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_T2T6R0S9Q1Y7Z1X7Y4W3X3V8V6E4C4&ageFrom=22&ageTo=22",
-            "summary": "의안번호 2221573 · 정무위원회 (위원회 심사중)"
+            "bill_no": "2219775",
+            "bill_name": "음악산업진흥에 관한 법률 일부개정법률안",
+            "proposed_date": "2026-07-06",
+            "committee": "문화체육관광위원회",
+            "status": "철회",
+            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_Z2Y6G0F6D2C5D1L7J4I7J4H5Q5O6N3&ageFrom=22&ageTo=22",
+            "summary": "의안번호 2219775 · 문화체육관광위원회 (철회)"
           }
         ]
       }
@@ -8794,13 +8794,13 @@
             "summary": "의안번호 2222530 · 국토교통위원회 (위원회 심사중)"
           },
           {
-            "bill_no": "2221888",
-            "bill_name": "조선산업 생태계 활성화 및 경쟁력 강화를 위한 특별법안",
-            "proposed_date": "2026-10-14",
+            "bill_no": "2220401",
+            "bill_name": "미래자동차산업의 경쟁력 강화 및 지원에 관한 특별법안",
+            "proposed_date": "2026-08-04",
             "committee": "산업통상자원중소벤처기업위원회",
             "status": "위원회 심사중",
-            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_6F465A8B0F714D91AA2518EC3753A8&ageFrom=22&ageTo=22",
-            "summary": "의안번호 2221888 · 산업통상자원중소벤처기업위원회 (위원회 심사중)"
+            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_O2O6M0N6M3K0K1G7H3F0F4E7C6D1L1&ageFrom=22&ageTo=22",
+            "summary": "의안번호 2220401 · 산업통상자원중소벤처기업위원회 (위원회 심사중)"
           }
         ]
       }
@@ -9343,13 +9343,13 @@
       ],
       "media_mentions": 3920,
       "weekly_stats": {
-        "bills_proposed": 234,
+        "bills_proposed": 88,
         "bills_cosponsored": 468,
-        "passed_original": 2,
-        "passed_amended": 4,
-        "alt_incorporated": 59,
-        "bills_passed": 6,
-        "subcommittee_passed": 59,
+        "passed_original": 1,
+        "passed_amended": 2,
+        "alt_incorporated": 24,
+        "bills_passed": 3,
+        "subcommittee_passed": 24,
         "voting_rate": 80.0,
         "votes_participated": 8,
         "votes_eligible": 10,
@@ -9370,24 +9370,6 @@
         "disciplinary_action": false,
         "recent_bills": [
           {
-            "bill_no": "2221841",
-            "bill_name": "강원과학기술원법안",
-            "proposed_date": "2026-10-08",
-            "committee": "과학기술정보방송통신위원회",
-            "status": "위원회 심사중",
-            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_F69420BC517444C4AFC8C2157EDEC8&ageFrom=22&ageTo=22",
-            "summary": "의안번호 2221841 · 과학기술정보방송통신위원회 (위원회 심사중)"
-          },
-          {
-            "bill_no": "2221840",
-            "bill_name": "국유재산특례제한법 일부개정법률안",
-            "proposed_date": "2026-10-08",
-            "committee": "재정경제기획위원회",
-            "status": "위원회 심사중",
-            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_369E5E0AB39D4FA086B60C62AF93F4&ageFrom=22&ageTo=22",
-            "summary": "의안번호 2221840 · 재정경제기획위원회 (위원회 심사중)"
-          },
-          {
             "bill_no": "2221580",
             "bill_name": "개발이익 환수에 관한 법률 일부개정법률안",
             "proposed_date": "2026-09-23",
@@ -9395,6 +9377,24 @@
             "status": "위원회 심사중",
             "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_C2K6I0J9H1G8G1C7D4B3Z5A0Z2H5I6&ageFrom=22&ageTo=22",
             "summary": "의안번호 2221580 · 국토교통위원회 (위원회 심사중)"
+          },
+          {
+            "bill_no": "2221579",
+            "bill_name": "지방세특례제한법 일부개정법률안",
+            "proposed_date": "2026-09-23",
+            "committee": "행정안전위원회",
+            "status": "위원회 심사중",
+            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_Y2Z6X0Y9W1V8V1R7S4Q3R1P2N0O3W9&ageFrom=22&ageTo=22",
+            "summary": "의안번호 2221579 · 행정안전위원회 (위원회 심사중)"
+          },
+          {
+            "bill_no": "2221578",
+            "bill_name": "접경지역 지원 특별법 일부개정법률안",
+            "proposed_date": "2026-09-23",
+            "committee": "행정안전위원회",
+            "status": "위원회 심사중",
+            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_Y2Y6X0V9W1R8S1Q7R4P2Q2O8W3X3V0&ageFrom=22&ageTo=22",
+            "summary": "의안번호 2221578 · 행정안전위원회 (위원회 심사중)"
           }
         ]
       }
@@ -9455,24 +9455,6 @@
         "disciplinary_action": false,
         "recent_bills": [
           {
-            "bill_no": "2221841",
-            "bill_name": "강원과학기술원법안",
-            "proposed_date": "2026-10-08",
-            "committee": "과학기술정보방송통신위원회",
-            "status": "위원회 심사중",
-            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_F69420BC517444C4AFC8C2157EDEC8&ageFrom=22&ageTo=22",
-            "summary": "의안번호 2221841 · 과학기술정보방송통신위원회 (위원회 심사중)"
-          },
-          {
-            "bill_no": "2221840",
-            "bill_name": "국유재산특례제한법 일부개정법률안",
-            "proposed_date": "2026-10-08",
-            "committee": "재정경제기획위원회",
-            "status": "위원회 심사중",
-            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_369E5E0AB39D4FA086B60C62AF93F4&ageFrom=22&ageTo=22",
-            "summary": "의안번호 2221840 · 재정경제기획위원회 (위원회 심사중)"
-          },
-          {
             "bill_no": "2221271",
             "bill_name": "국회법 일부개정법률안",
             "proposed_date": "2026-09-09",
@@ -9480,6 +9462,24 @@
             "status": "위원회 심사중",
             "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_V2V6U0U9C0B8B0Z9A0Z2Z3H3F0G1E8&ageFrom=22&ageTo=22",
             "summary": "의안번호 2221271 · 국회운영위원회 (위원회 심사중)"
+          },
+          {
+            "bill_no": "2219622",
+            "bill_name": "지방세특례제한법 일부개정법률안",
+            "proposed_date": "2026-06-30",
+            "committee": "행정안전위원회",
+            "status": "위원회 심사중",
+            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_M2I6I0G6F2G9E1E3N4N7L2K5K4J8K0&ageFrom=22&ageTo=22",
+            "summary": "의안번호 2219622 · 행정안전위원회 (위원회 심사중)"
+          },
+          {
+            "bill_no": "2219618",
+            "bill_name": "아동복지법 일부개정법률안",
+            "proposed_date": "2026-06-30",
+            "committee": "보건복지위원회",
+            "status": "위원회 심사중",
+            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_Q2O6P0N6O2W9U1V3T4U6S4S1B7Z3A9&ageFrom=22&ageTo=22",
+            "summary": "의안번호 2219618 · 보건복지위원회 (위원회 심사중)"
           }
         ]
       }
@@ -9856,9 +9856,9 @@
         "bills_cosponsored": 70,
         "passed_original": 1,
         "passed_amended": 1,
-        "alt_incorporated": 3,
+        "alt_incorporated": 4,
         "bills_passed": 2,
-        "subcommittee_passed": 3,
+        "subcommittee_passed": 4,
         "voting_rate": 40.0,
         "votes_participated": 4,
         "votes_eligible": 10,
@@ -9941,9 +9941,9 @@
         "bills_cosponsored": 20,
         "passed_original": 0,
         "passed_amended": 0,
-        "alt_incorporated": 1,
+        "alt_incorporated": 0,
         "bills_passed": 0,
-        "subcommittee_passed": 1,
+        "subcommittee_passed": 0,
         "voting_rate": 100.0,
         "votes_participated": 6,
         "votes_eligible": 6,
@@ -12505,24 +12505,6 @@
         "disciplinary_action": false,
         "recent_bills": [
           {
-            "bill_no": "2221841",
-            "bill_name": "강원과학기술원법안",
-            "proposed_date": "2026-10-08",
-            "committee": "과학기술정보방송통신위원회",
-            "status": "위원회 심사중",
-            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_F69420BC517444C4AFC8C2157EDEC8&ageFrom=22&ageTo=22",
-            "summary": "의안번호 2221841 · 과학기술정보방송통신위원회 (위원회 심사중)"
-          },
-          {
-            "bill_no": "2221840",
-            "bill_name": "국유재산특례제한법 일부개정법률안",
-            "proposed_date": "2026-10-08",
-            "committee": "재정경제기획위원회",
-            "status": "위원회 심사중",
-            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_369E5E0AB39D4FA086B60C62AF93F4&ageFrom=22&ageTo=22",
-            "summary": "의안번호 2221840 · 재정경제기획위원회 (위원회 심사중)"
-          },
-          {
             "bill_no": "2221463",
             "bill_name": "국가연구시설·장비의 관리 및 활용 등에 관한 법률안",
             "proposed_date": "2026-09-18",
@@ -12530,6 +12512,24 @@
             "status": "위원회 심사중",
             "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_R2P6Q0O9P1L7J1J0H0J0H4H2P7O8O0&ageFrom=22&ageTo=22",
             "summary": "의안번호 2221463 · 과학기술정보방송통신위원회 (위원회 심사중)"
+          },
+          {
+            "bill_no": "2220196",
+            "bill_name": "자동차관리법 일부개정법률안",
+            "proposed_date": "2026-07-28",
+            "committee": "국토교통위원회",
+            "status": "위원회 심사중",
+            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_A2Y6Y0G6H3F0E1E1C4D8Z5A8Y3Y9X7&ageFrom=22&ageTo=22",
+            "summary": "의안번호 2220196 · 국토교통위원회 (위원회 심사중)"
+          },
+          {
+            "bill_no": "2217381",
+            "bill_name": "강원특별자치도 설치 및 미래산업글로벌도시 조성을 위한 특별법 일부개정법률안",
+            "proposed_date": "2026-03-11",
+            "committee": "행정안전위원회",
+            "status": "대안반영폐기",
+            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_L2J6K0I3E1F1D1D1B3C7A5B2J7K0I3&ageFrom=22&ageTo=22",
+            "summary": "의안번호 2217381 · 행정안전위원회 (대안반영폐기)"
           }
         ]
       }
@@ -14128,15 +14128,6 @@
             "summary": "의안번호 2222161 · 국토교통위원회 (위원회 심사중)"
           },
           {
-            "bill_no": "2221315",
-            "bill_name": "전세사기피해자 지원 및 주거안정에 관한 특별법 일부개정법률안",
-            "proposed_date": "2026-09-10",
-            "committee": "국토교통위원회",
-            "status": "위원회 심사중",
-            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_C2A6B0Z9A0H7G1G5F1G8E5E2M9N4L1&ageFrom=22&ageTo=22",
-            "summary": "의안번호 2221315 · 국토교통위원회 (위원회 심사중)"
-          },
-          {
             "bill_no": "2221313",
             "bill_name": "건축법 일부개정법률안",
             "proposed_date": "2026-09-10",
@@ -14144,6 +14135,15 @@
             "status": "위원회 심사중",
             "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_M2N6L0M9K0S2T1R6R0Q9R1P6P8Y9W4&ageFrom=22&ageTo=22",
             "summary": "의안번호 2221313 · 국토교통위원회 (위원회 심사중)"
+          },
+          {
+            "bill_no": "2221312",
+            "bill_name": "공인중개사법 일부개정법률안",
+            "proposed_date": "2026-09-10",
+            "committee": "국토교통위원회",
+            "status": "위원회 심사중",
+            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_V2T6U0S9S0A2Z1Z6X1Y0W3X3M3M4L0&ageFrom=22&ageTo=22",
+            "summary": "의안번호 2221312 · 국토교통위원회 (위원회 심사중)"
           }
         ]
       }
@@ -14391,13 +14391,13 @@
             "summary": "의안번호 2220387 · 행정안전위원회 (위원회 심사중)"
           },
           {
-            "bill_no": "2219913",
-            "bill_name": "변호사시험법 일부개정법률안",
-            "proposed_date": "2026-07-13",
-            "committee": "법제사법위원회",
+            "bill_no": "2219641",
+            "bill_name": "소방시설 설치 및 관리에 관한 법률 일부개정법률안",
+            "proposed_date": "2026-06-30",
+            "committee": "행정안전위원회",
             "status": "위원회 심사중",
-            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_K2L6J0K7I0J6H1I1P3O7O5N2O9M5U3&ageFrom=22&ageTo=22",
-            "summary": "의안번호 2219913 · 법제사법위원회 (위원회 심사중)"
+            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_A2J6G0F6O0N8L1G6E2E6C1M5U0U7Q8&ageFrom=22&ageTo=22",
+            "summary": "의안번호 2219641 · 행정안전위원회 (위원회 심사중)"
           }
         ]
       }
@@ -14865,15 +14865,6 @@
             "summary": "의안번호 2222390 · 국방위원회 (위원회 심사중)"
           },
           {
-            "bill_no": "2220937",
-            "bill_name": "국방첨단전력사업에 관한 법률안",
-            "proposed_date": "2026-08-31",
-            "committee": "국방위원회",
-            "status": "위원회 심사중",
-            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_C2A6B0Z8Y2Y7G1H0F1G9E0C6D8Y6A9&ageFrom=22&ageTo=22",
-            "summary": "의안번호 2220937 · 국방위원회 (위원회 심사중)"
-          },
-          {
             "bill_no": "2220857",
             "bill_name": "군급식기본법 일부개정법률안",
             "proposed_date": "2026-08-27",
@@ -14881,6 +14872,15 @@
             "status": "위원회 심사중",
             "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_G2H6G0G8E0F5N1L4M4K6L2J5H5I0G1&ageFrom=22&ageTo=22",
             "summary": "의안번호 2220857 · 국방위원회 (위원회 심사중)"
+          },
+          {
+            "bill_no": "2220836",
+            "bill_name": "핵추진잠수함사업에 관한 특별법안",
+            "proposed_date": "2026-08-27",
+            "committee": "국방위원회",
+            "status": "위원회 심사중",
+            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_K2L6J0J8I2G5H1P2P5O3O1M6L6M3T2&ageFrom=22&ageTo=22",
+            "summary": "의안번호 2220836 · 국방위원회 (위원회 심사중)"
           }
         ]
       }
@@ -15710,15 +15710,6 @@
         "disciplinary_action": false,
         "recent_bills": [
           {
-            "bill_no": "2221942",
-            "bill_name": "조세특례제한법 일부개정법률안",
-            "proposed_date": "2026-10-16",
-            "committee": "재정경제기획위원회",
-            "status": "위원회 심사중",
-            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_9FD425427EFA490A97CEEB4137B09C&ageFrom=22&ageTo=22",
-            "summary": "의안번호 2221942 · 재정경제기획위원회 (위원회 심사중)"
-          },
-          {
             "bill_no": "2220862",
             "bill_name": "조세특례제한법 일부개정법률안",
             "proposed_date": "2026-08-27",
@@ -15735,6 +15726,15 @@
             "status": "위원회 심사중",
             "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_O2R6Q0X6W0V5D1A7Z2V4U1G5C5B4K7&ageFrom=22&ageTo=22",
             "summary": "의안번호 2219191 · 산업통상자원중소벤처기업위원회 (위원회 심사중)"
+          },
+          {
+            "bill_no": "2219190",
+            "bill_name": "신용보증기금법 일부개정법률안",
+            "proposed_date": "2026-06-11",
+            "committee": "정무위원회",
+            "status": "위원회 심사중",
+            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_A2I6H0G6F0U5S1J7G2C6B5A3H0F0E0&ageFrom=22&ageTo=22",
+            "summary": "의안번호 2219190 · 정무위원회 (위원회 심사중)"
           }
         ]
       }
@@ -18617,13 +18617,13 @@
             "summary": "의안번호 2220413 · 과학기술정보방송통신위원회 (위원회 심사중)"
           },
           {
-            "bill_no": "2219709",
-            "bill_name": "조세특례제한법 일부개정법률안",
-            "proposed_date": "2026-07-02",
-            "committee": "재정경제기획위원회",
+            "bill_no": "2219685",
+            "bill_name": "전기통신사업법 일부개정법률안",
+            "proposed_date": "2026-07-01",
+            "committee": "과학기술정보방송통신위원회",
             "status": "위원회 심사중",
-            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_E2E6C0B7B0J1K1I5J1H1F4G8O8P0N8&ageFrom=22&ageTo=22",
-            "summary": "의안번호 2219709 · 재정경제기획위원회 (위원회 심사중)"
+            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_Q2Z6Y0F6D0D4B1Y6X0W7U4E9M5L4I3&ageFrom=22&ageTo=22",
+            "summary": "의안번호 2219685 · 과학기술정보방송통신위원회 (위원회 심사중)"
           }
         ]
       }
@@ -20570,13 +20570,13 @@
             "summary": "의안번호 2221264 · 기후에너지환경노동위원회 (위원회 심사중)"
           },
           {
-            "bill_no": "2220646",
-            "bill_name": "공간정보의 구축 및 관리 등에 관한 법률 일부개정법률안",
-            "proposed_date": "2026-08-20",
-            "committee": "국토교통위원회",
+            "bill_no": "2220495",
+            "bill_name": "공직선거법 일부개정법률안",
+            "proposed_date": "2026-08-07",
+            "committee": "행정안전위원회",
             "status": "위원회 심사중",
-            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_X2Y6T0U8S1R3R1Q7Q2Y4Z2X2V0W8V3&ageFrom=22&ageTo=22",
-            "summary": "의안번호 2220646 · 국토교통위원회 (위원회 심사중)"
+            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_M2M6V0V7T2U1S1R6R1N1N3M2N0L9J3&ageFrom=22&ageTo=22",
+            "summary": "의안번호 2220495 · 행정안전위원회 (위원회 심사중)"
           }
         ]
       }
@@ -20636,15 +20636,6 @@
         "disciplinary_action": false,
         "recent_bills": [
           {
-            "bill_no": "2215659",
-            "bill_name": "5·18민주화운동 등에 관한 특별법 일부개정법률안",
-            "proposed_date": "2025-12-29",
-            "committee": "법제사법위원회",
-            "status": "위원회 심사중",
-            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_P2U5Q0P9O0V9U1T3Z2Y3W2V1B1A4Z7&ageFrom=22&ageTo=22",
-            "summary": "의안번호 2215659 · 법제사법위원회 (위원회 심사중)"
-          },
-          {
             "bill_no": "2211212",
             "bill_name": "경찰관 직무집행법 일부개정법률안",
             "proposed_date": "2025-07-02",
@@ -20661,6 +20652,15 @@
             "status": "위원회 심사중",
             "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_W2U5V0D6B3C0A1A2Z5A5H5I1G8F1F3&ageFrom=22&ageTo=22",
             "summary": "의안번호 2211211 · 행정안전위원회 (위원회 심사중)"
+          },
+          {
+            "bill_no": "2211174",
+            "bill_name": "디지털크리에이터 권리보호 및 육성에 관한 법률안",
+            "proposed_date": "2025-06-30",
+            "committee": "과학기술정보방송통신위원회",
+            "status": "위원회 심사중",
+            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_J2H5I0G5O2P0N1O6M2N7L2T4T6S7T6&ageFrom=22&ageTo=22",
+            "summary": "의안번호 2211174 · 과학기술정보방송통신위원회 (위원회 심사중)"
           }
         ]
       }
@@ -21571,31 +21571,13 @@
         "disciplinary_action": false,
         "recent_bills": [
           {
-            "bill_no": "2221208",
-            "bill_name": "도시가스사업법 일부개정법률안",
-            "proposed_date": "2026-09-08",
-            "committee": "산업통상자원중소벤처기업위원회",
+            "bill_no": "2221129",
+            "bill_name": "폐기물관리법 일부개정법률안",
+            "proposed_date": "2026-09-07",
+            "committee": "기후에너지환경노동위원회",
             "status": "위원회 심사중",
-            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_M2L6L0J8K1J8J1R4R1Q0O5P0N3O9W7&ageFrom=22&ageTo=22",
-            "summary": "의안번호 2221208 · 산업통상자원중소벤처기업위원회 (위원회 심사중)"
-          },
-          {
-            "bill_no": "2221207",
-            "bill_name": "고압가스 안전관리법 일부개정법률안",
-            "proposed_date": "2026-09-08",
-            "committee": "산업통상자원중소벤처기업위원회",
-            "status": "위원회 심사중",
-            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_L2M6K0L8T1T8R1Q4Q0O9P3X5Y5W2U5&ageFrom=22&ageTo=22",
-            "summary": "의안번호 2221207 · 산업통상자원중소벤처기업위원회 (위원회 심사중)"
-          },
-          {
-            "bill_no": "2221205",
-            "bill_name": "액화석유가스의 안전관리 및 사업법 일부개정법률안",
-            "proposed_date": "2026-09-08",
-            "committee": "산업통상자원중소벤처기업위원회",
-            "status": "위원회 심사중",
-            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_Q2P6Q0O8P1N8N1D4B1B1A5B8Z1Z8H0&ageFrom=22&ageTo=22",
-            "summary": "의안번호 2221205 · 산업통상자원중소벤처기업위원회 (위원회 심사중)"
+            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_L2M6K0L3S1R2S1Q4Q5O8Q1X4Y0W4V5&ageFrom=22&ageTo=22",
+            "summary": "의안번호 2221129 · 기후에너지환경노동위원회 (위원회 심사중)"
           }
         ]
       }
@@ -22170,15 +22152,6 @@
         "disciplinary_action": false,
         "recent_bills": [
           {
-            "bill_no": "2221909",
-            "bill_name": "전통사찰의 보존 및 지원에 관한 법률 일부개정법률안",
-            "proposed_date": "2026-10-15",
-            "committee": "문화체육관광위원회",
-            "status": "위원회 심사중",
-            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_E124335245E74DCFAFF6977223C766&ageFrom=22&ageTo=22",
-            "summary": "의안번호 2221909 · 문화체육관광위원회 (위원회 심사중)"
-          },
-          {
             "bill_no": "2221241",
             "bill_name": "도시 및 주거환경정비법 일부개정법률안",
             "proposed_date": "2026-09-09",
@@ -22195,6 +22168,15 @@
             "status": "위원회 심사중",
             "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_Q2Q6P0N8O2V7W0V9S3S3O0P8N3O2M2&ageFrom=22&ageTo=22",
             "summary": "의안번호 2221231 · 재정경제기획위원회 (위원회 심사중)"
+          },
+          {
+            "bill_no": "2220411",
+            "bill_name": "지방회계법 일부개정법률안",
+            "proposed_date": "2026-08-04",
+            "committee": "행정안전위원회",
+            "status": "위원회 심사중",
+            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_N2I6J0H7I0G1G1F5N0N5M5N8L8L1K2&ageFrom=22&ageTo=22",
+            "summary": "의안번호 2220411 · 행정안전위원회 (위원회 심사중)"
           }
         ]
       }
@@ -23462,13 +23444,13 @@
             "summary": "의안번호 2218792 · 행정안전위원회 (위원회 심사중)"
           },
           {
-            "bill_no": "2215539",
-            "bill_name": "통일교와 정치권 인사간 불법 금품수수 및 유착의혹 진상규명을 위한 특별검사 임명 등에 관한 법률안",
-            "proposed_date": "2025-12-23",
-            "committee": "법제사법위원회",
+            "bill_no": "2213697",
+            "bill_name": "법인세법 일부개정법률안",
+            "proposed_date": "2025-10-24",
+            "committee": "재정경제기획위원회",
             "status": "위원회 심사중",
-            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_N2S5J1O2W2Y3V1T5B5W2K0W5P2B8K5&ageFrom=22&ageTo=22",
-            "summary": "의안번호 2215539 · 법제사법위원회 (위원회 심사중)"
+            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_B2Z5Z1H0I1H4F1F7D0E4M1N8L8M2K4&ageFrom=22&ageTo=22",
+            "summary": "의안번호 2213697 · 재정경제기획위원회 (위원회 심사중)"
           }
         ]
       }
@@ -24060,13 +24042,13 @@
             "summary": "의안번호 2219830 · 행정안전위원회 (위원회 심사중)"
           },
           {
-            "bill_no": "2219709",
-            "bill_name": "조세특례제한법 일부개정법률안",
-            "proposed_date": "2026-07-02",
-            "committee": "재정경제기획위원회",
+            "bill_no": "2218959",
+            "bill_name": "방송통신발전 기본법 일부개정법률안",
+            "proposed_date": "2026-05-13",
+            "committee": "과학기술정보방송통신위원회",
             "status": "위원회 심사중",
-            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_E2E6C0B7B0J1K1I5J1H1F4G8O8P0N8&ageFrom=22&ageTo=22",
-            "summary": "의안번호 2219709 · 재정경제기획위원회 (위원회 심사중)"
+            "detail_link": "http://likms.assembly.go.kr/bill/billDetail.do?billId=PRC_Q2R6G0H5F0F6D1E2D1K5L3J9K1I9J4&ageFrom=22&ageTo=22",
+            "summary": "의안번호 2218959 · 과학기술정보방송통신위원회 (위원회 심사중)"
           }
         ]
       }
