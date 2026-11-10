@@ -27,8 +27,8 @@ from avatar_generator import generate_caricature_svg
 
 app = FastAPI(
     title="PoliRank API",
-    description="국회의원 객관적 6대 정량 지표 랭킹 & 커뮤니티 MVP API",
-    version="1.1.0"
+    description="제22대 국회의원 299인 객관적 6대 정량 지표 랭킹 & 커뮤니티 풀버전 API",
+    version="2.0.0"
 )
 
 # CORS 설정
@@ -63,8 +63,9 @@ def startup_event():
     try:
         c.execute("SELECT COUNT(*) as cnt FROM members")
         cnt = c.fetchone()["cnt"]
-        if cnt == 0:
-            print("[*] Empty database detected on startup. Seeding members data...")
+        has_all_seed = os.path.exists(os.path.join(CURRENT_DIR, "seed_data_all.json"))
+        if cnt == 0 or (cnt < 200 and has_all_seed):
+            print(f"[*] Database has {cnt} members. Seeding full 299-member data...")
             seed()
     except Exception as e:
         print("[!] Startup check failed, running seed:", e)
@@ -140,12 +141,26 @@ def get_member_avatar(member_id: str, size: int = 140):
         name = "의원"
         party = "무소속"
         color = "#4A5568"
+        gender = None
+        age = None
+        committee_role = None
     else:
         name = member["name"]
         party = member["party"]
         color = member["party_color"]
-        
-    svg_code = generate_caricature_svg(name=name, party=party, party_color=color, size=size)
+        gender = member.get("gender")
+        age = member.get("age")
+        committee_role = member.get("committee_role")
+
+    svg_code = generate_caricature_svg(
+        name=name,
+        party=party,
+        party_color=color,
+        size=size,
+        gender=gender,
+        age=age,
+        committee_role=committee_role,
+    )
     return Response(content=svg_code, media_type="image/svg+xml")
 
 @app.post("/api/members/{member_id}/cheer")

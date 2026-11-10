@@ -3,8 +3,12 @@
  */
 
 // Global State
+const PAGE_SIZE = 36;
 let allMembers = [];
 let filteredMembers = [];
+let displayedCount = PAGE_SIZE;
+let renderedCount = 0;
+let showAllMode = false;
 let currentSort = 'total';
 let currentParty = 'all';
 let searchQuery = '';
@@ -15,6 +19,11 @@ let isModalPhotoView = false;
 // DOM Elements
 const membersGrid = document.getElementById('members-grid');
 const filterResultCount = document.getElementById('filter-result-count');
+const displayShowingCount = document.getElementById('display-showing-count');
+const loadMoreContainer = document.getElementById('load-more-container');
+const btnLoadMore = document.getElementById('btn-load-more');
+const btnLoadMoreText = document.getElementById('btn-load-more-text');
+const btnShowAllText = document.getElementById('btn-show-all-text');
 const currentRankLabel = document.getElementById('current-rank-label');
 const searchInput = document.getElementById('member-search');
 const detailModal = document.getElementById('detail-modal');
@@ -61,7 +70,7 @@ function initTheme() {
     }
 }
 
-// Fetch Header Live Summary Stats
+// Fetch Header Live Summary Stats & Party Seat Counts
 async function loadSummaryStats() {
     try {
         const res = await fetch('/api/stats/summary');
@@ -71,16 +80,36 @@ async function loadSummaryStats() {
             if (cheerElem) cheerElem.textContent = `${data.total_cheers.toLocaleString()}회`;
             const memElem = document.getElementById('header-member-count');
             if (memElem) memElem.textContent = `${data.total_members}명`;
+            if (data.party_counts) {
+                updatePartyCounts(data.party_counts);
+            }
         }
     } catch (err) {
         console.error('Failed to load summary stats', err);
     }
 }
 
+// Update Party Filter Chip Seat Counts
+function updatePartyCounts(partyCounts) {
+    const chips = document.querySelectorAll('#party-filters .party-chip');
+    chips.forEach(chip => {
+        const partyKey = chip.dataset.party;
+        const countSpan = chip.querySelector('.party-count');
+        if (countSpan && partyCounts.hasOwnProperty(partyKey)) {
+            countSpan.textContent = `(${partyCounts[partyKey]})`;
+        } else if (countSpan && partyKey === '무소속/기타') {
+            const etcCnt = partyCounts['무소속/기타'] ?? partyCounts['무소속'] ?? 0;
+            countSpan.textContent = `(${etcCnt})`;
+        }
+    });
+}
+
 // Fetch Members List
 async function loadMembers() {
     try {
-        const url = `/api/members?sort_by=${currentSort}&party=${currentParty}`;
+        displayedCount = PAGE_SIZE;
+        showAllMode = false;
+        const url = `/api/members?sort_by=${currentSort}&party=${encodeURIComponent(currentParty)}`;
         const res = await fetch(url);
         const data = await res.json();
         if (data.status === 'success') {
@@ -184,12 +213,14 @@ function applyFiltersAndRender() {
         filteredMembers = [...allMembers];
     } else {
         filteredMembers = allMembers.filter(m => {
+            const kwMatch = Array.isArray(m.keywords) && m.keywords.some(k => k.toLowerCase().includes(searchQuery));
             return (
                 m.name.toLowerCase().includes(searchQuery) ||
                 (m.district && m.district.toLowerCase().includes(searchQuery)) ||
                 (m.committee && m.committee.toLowerCase().includes(searchQuery)) ||
                 (m.party && m.party.toLowerCase().includes(searchQuery)) ||
-                (m.quote && m.quote.toLowerCase().includes(searchQuery))
+                (m.quote && m.quote.toLowerCase().includes(searchQuery)) ||
+                kwMatch
             );
         });
     }
@@ -198,7 +229,12 @@ function applyFiltersAndRender() {
         filterResultCount.textContent = filteredMembers.length;
     }
 
-    renderMemberCards(filteredMembers);
+    // 검색어가 있을 때는 매칭된 전체 결과 즉시 표시, 평상시에는 36명 단위 제어
+    computeTiedRanks(filteredMembers);
+    const limit = searchQuery || showAllMode
+        ? filteredMembers.length
+        : Math.min(displayedCount, filteredMembers.length);
+    renderMemberCards(filteredMembers, limit);
 }
 
 // Helper: Get metric value for sorting & tied ranking
@@ -213,23 +249,14 @@ function getMemberStatValue(member, sortKey) {
     return member.total_score || 0;
 }
 
-// Render Member Card Elements with Tied Ranking (공동순위)
-function renderMemberCards(members) {
-    if (!membersGrid) return;
-    membersGrid.innerHTML = '';
+// Standard Competition Ranking (Tied Ranking: 공동순위 사전 계산)
+function computeTiedRanks(members) {
+    const scoreCounts = {};
+    members.forEach(m => {
+        const val = getMemberStatValue(m, currentSort);
+        scoreCounts[val] = (scoreCounts[val] || 0) + 1;
+    });
 
-    if (members.length === 0) {
-        membersGrid.innerHTML = `
-            <div class="col-span-full py-16 text-center space-y-3">
-                <i class="fa-solid fa-user-slash text-4xl text-slate-300 dark:text-slate-600"></i>
-                <p class="text-sm font-semibold text-slate-500">조건에 맞는 국회의원이 없습니다.</p>
-                <button onclick="resetFilters()" class="text-xs text-sky-600 dark:text-sky-400 font-bold underline">검색 초기화</button>
-            </div>
-        `;
-        return;
-    }
-
-    // Standard Competition Ranking (Tied Ranking: 공동 1위, 공동 2위 등)
     let currentRank = 1;
     members.forEach((member, index) => {
         const curScore = getMemberStatValue(member, currentSort);
@@ -241,17 +268,91 @@ function renderMemberCards(members) {
         } else {
             currentRank = 1;
         }
-
-        // 전체 필터링 목록에서 동일 점수자가 2명 이상인지 검사
-        const isTied = members.some((m, idx) => idx !== index && getMemberStatValue(m, currentSort) === curScore);
-        const rankText = isTied ? `공동 ${currentRank}위` : `${currentRank}위`;
+        const isTied = scoreCounts[curScore] > 1;
         member.current_display_rank = currentRank;
-        member.current_display_rank_text = rankText;
+        member.current_display_rank_text = isTied ? `공동 ${currentRank}위` : `${currentRank}위`;
         member.is_tied = isTied;
-
-        const card = createMemberCardElement(member, currentRank, rankText, isTied);
-        membersGrid.appendChild(card);
     });
+}
+
+// Render Member Card Elements (Initial Slice)
+function renderMemberCards(members, limit) {
+    if (!membersGrid) return;
+    membersGrid.innerHTML = '';
+    renderedCount = 0;
+
+    if (members.length === 0) {
+        membersGrid.innerHTML = `
+            <div class="col-span-full py-16 text-center space-y-3">
+                <i class="fa-solid fa-user-slash text-4xl text-slate-300 dark:text-slate-600"></i>
+                <p class="text-sm font-semibold text-slate-500">조건에 맞는 국회의원이 없습니다.</p>
+                <button onclick="resetFilters()" class="text-xs text-sky-600 dark:text-sky-400 font-bold underline">검색 초기화</button>
+            </div>
+        `;
+        updateLoadMoreControls();
+        return;
+    }
+
+    appendMemberCards(members, 0, limit);
+    updateLoadMoreControls();
+}
+
+// Append a range of member cards efficiently
+function appendMemberCards(members, startIdx, endIdx) {
+    const fragment = document.createDocumentFragment();
+    const safeEnd = Math.min(endIdx, members.length);
+    for (let i = startIdx; i < safeEnd; i++) {
+        const member = members[i];
+        const card = createMemberCardElement(
+            member,
+            member.current_display_rank,
+            member.current_display_rank_text,
+            member.is_tied
+        );
+        fragment.appendChild(card);
+    }
+    membersGrid.appendChild(fragment);
+    renderedCount = safeEnd;
+}
+
+// Update Pagination / Load More Controls
+function updateLoadMoreControls() {
+    if (displayShowingCount) {
+        displayShowingCount.textContent = renderedCount;
+    }
+    if (!loadMoreContainer) return;
+
+    const total = filteredMembers.length;
+    const remaining = total - renderedCount;
+    if (remaining <= 0 || searchQuery) {
+        loadMoreContainer.classList.add('hidden');
+        return;
+    }
+
+    loadMoreContainer.classList.remove('hidden');
+    if (btnLoadMoreText) {
+        const nextBatch = Math.min(PAGE_SIZE, remaining);
+        btnLoadMoreText.textContent = `👇 다음 의원 더 보기 (+${nextBatch}명)`;
+    }
+    if (btnShowAllText) {
+        btnShowAllText.textContent = `전체 ${total}명 한 번에 보기`;
+    }
+}
+
+// Load Next Batch (+36)
+function loadMoreMembers() {
+    const nextLimit = Math.min(displayedCount + PAGE_SIZE, filteredMembers.length);
+    appendMemberCards(filteredMembers, renderedCount, nextLimit);
+    displayedCount = nextLimit;
+    updateLoadMoreControls();
+}
+
+// Show All Remaining Members
+function showAllMembers() {
+    showAllMode = true;
+    appendMemberCards(filteredMembers, renderedCount, filteredMembers.length);
+    displayedCount = filteredMembers.length;
+    updateLoadMoreControls();
 }
 
 // 3D Flip Card for Avatar Toggle
@@ -350,12 +451,12 @@ function createMemberCardElement(member, displayRank, rankText, isTied) {
                 <div class="flip-box-inner">
                     <!-- Front: Cartoon SVG -->
                     <div class="flip-box-front flex items-center justify-center p-0.5">
-                        <img src="${member.avatar_url}" alt="${member.name} 의원 캐리커쳐" class="w-full h-full object-contain filter drop-shadow-md">
+                        <img src="${member.avatar_url}" alt="${member.name} 의원 캐리커쳐" loading="lazy" decoding="async" class="w-full h-full object-contain filter drop-shadow-md">
                         <span class="absolute bottom-1 right-1 text-[9px] px-1.5 py-0.5 rounded-full bg-slate-900/70 text-white font-medium backdrop-blur-xs">🎨 만화</span>
                     </div>
                     <!-- Back: Official Real Photo -->
                     <div class="flip-box-back flex items-center justify-center border-2 border-sky-500/80 rounded-2xl bg-slate-900 shadow-md">
-                        <img src="${member.official_photo_url || member.photo_url}" alt="${member.name} 의원 실제 사진" class="w-full h-full object-cover rounded-2xl">
+                        <img src="${member.official_photo_url || member.photo_url}" alt="${member.name} 의원 실제 사진" loading="lazy" decoding="async" onerror="this.onerror=null; this.src='${member.avatar_url}';" class="w-full h-full object-cover rounded-2xl">
                         <span class="absolute bottom-1 right-1 text-[9px] px-1.5 py-0.5 rounded-full bg-sky-600/90 text-white font-medium backdrop-blur-xs">📷 실사진</span>
                     </div>
                 </div>
@@ -535,7 +636,8 @@ async function openModal(memberId) {
         document.getElementById('modal-hanja-name').textContent = member.hanja_name || '';
         document.getElementById('modal-age').textContent = member.age ? `${member.age}세` : '';
         document.getElementById('modal-district').textContent = member.district;
-        document.getElementById('modal-committee').textContent = `${member.committee} (${member.committee_role === 'chair' ? '위원장' : '위원'})`;
+        const roleLabel = member.committee_role_label || (member.committee_role === 'chair' ? '위원장' : member.committee_role === 'secretary' ? '간사' : '위원');
+        document.getElementById('modal-committee').textContent = `${member.committee} (${roleLabel})`;
         document.getElementById('modal-total-score').textContent = member.total_score;
         document.getElementById('modal-tier-badge').textContent = `${member.tier} TIER`;
         document.getElementById('modal-terms-badge').textContent = `${member.terms}선`;
@@ -617,7 +719,7 @@ function renderModalAvatar() {
     if (!container || !currentMember) return;
 
     if (isModalPhotoView && (currentMember.official_photo_url || currentMember.photo_url)) {
-        container.innerHTML = `<img src="${currentMember.official_photo_url || currentMember.photo_url}" alt="${currentMember.name}" class="w-full h-full object-cover">`;
+        container.innerHTML = `<img src="${currentMember.official_photo_url || currentMember.photo_url}" alt="${currentMember.name}" onerror="this.onerror=null; this.src='${currentMember.avatar_url}?size=160';" class="w-full h-full object-cover">`;
     } else {
         container.innerHTML = `<img src="${currentMember.avatar_url}?size=160" alt="${currentMember.name} 캐리커쳐" class="w-full h-full object-contain filter drop-shadow-md">`;
     }
@@ -637,9 +739,15 @@ function renderModalBills(bills) {
         let statusColor = 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300';
         if (b.status && b.status.includes('가결')) {
             statusColor = 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 font-bold';
-        } else if (b.status && b.status.includes('회부')) {
+        } else if (b.status && b.status.includes('대안반영')) {
+            statusColor = 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/30 font-semibold';
+        } else if (b.status && (b.status.includes('회부') || b.status.includes('심사'))) {
             statusColor = 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/30';
         }
+
+        const linkHtml = b.detail_link
+            ? `<a href="${b.detail_link}" target="_blank" rel="noopener noreferrer" class="text-[10px] text-sky-500 hover:underline font-semibold whitespace-nowrap"><i class="fa-solid fa-arrow-up-right-from-square mr-0.5"></i>의안상세</a>`
+            : '';
 
         return `
             <div class="p-3 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 space-y-1">
@@ -647,9 +755,12 @@ function renderModalBills(bills) {
                     <span class="text-xs font-bold text-slate-800 dark:text-slate-100 flex-1 truncate">${b.bill_name}</span>
                     <span class="text-[10px] px-2 py-0.5 rounded-full ${statusColor} whitespace-nowrap">${b.status || '심사중'}</span>
                 </div>
-                <div class="flex items-center space-x-3 text-[11px] text-slate-400">
-                    <span><i class="fa-regular fa-calendar mr-1"></i>${b.proposed_date || '2026-11'}</span>
-                    <span><i class="fa-solid fa-landmark mr-1"></i>${b.committee || '상임위'}</span>
+                <div class="flex items-center justify-between text-[11px] text-slate-400">
+                    <div class="flex items-center space-x-3">
+                        <span><i class="fa-regular fa-calendar mr-1"></i>${b.proposed_date || '2026-11'}</span>
+                        <span><i class="fa-solid fa-landmark mr-1"></i>${b.committee || '상임위'}</span>
+                    </div>
+                    ${linkHtml}
                 </div>
                 ${b.summary ? `<p class="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 pt-0.5">${b.summary}</p>` : ''}
             </div>

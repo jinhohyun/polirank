@@ -20,8 +20,8 @@ def ensure_initialized():
     try:
         c.execute("SELECT COUNT(*) as cnt FROM members")
         cnt = c.fetchone()["cnt"]
-        if cnt == 0:
-            print("[*] Empty database detected. Seeding 32 members data...")
+        if cnt == 0 or (cnt < 200 and os.path.exists(os.path.join(CURRENT_DIR, "seed_data_all.json"))):
+            print(f"[*] Database has {cnt} members. Seeding full 299-member data...")
             seed()
     except Exception:
         print("[*] Database not initialized. Running seed...")

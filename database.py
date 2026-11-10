@@ -4,6 +4,7 @@ PoliRank - SQLite 데이터베이스 스키마 및 CRUD 연동 모듈 (6대 지�
 import sqlite3
 import os
 import json
+from collections import Counter
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 
@@ -23,6 +24,7 @@ def init_db():
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS members (
         id TEXT PRIMARY KEY,
+        mona_cd TEXT,
         name TEXT NOT NULL,
         hanja_name TEXT,
         party TEXT NOT NULL,
@@ -31,7 +33,9 @@ def init_db():
         region_type TEXT,
         committee TEXT,
         committee_role TEXT,
+        committee_role_label TEXT DEFAULT '위원',
         terms INTEGER DEFAULT 1,
+        gender TEXT DEFAULT 'male',
         age INTEGER,
         photo_url TEXT,
         official_photo_url TEXT,
@@ -57,6 +61,17 @@ def init_db():
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """)
+
+    # 구버전 DB 스키마 호환 마이그레이션
+    cursor.execute("PRAGMA table_info(members)")
+    existing_cols = {row["name"] for row in cursor.fetchall()}
+    for col_name, col_def in [
+        ("mona_cd", "TEXT"),
+        ("gender", "TEXT DEFAULT 'male'"),
+        ("committee_role_label", "TEXT DEFAULT '위원'"),
+    ]:
+        if col_name not in existing_cols:
+            cursor.execute(f"ALTER TABLE members ADD COLUMN {col_name} {col_def}")
     
     # 토론 및 응원 댓글 테이블
     cursor.execute("""
@@ -97,13 +112,16 @@ def get_all_members(party: Optional[str] = None, sort_by: str = "total", search:
     params = []
     
     if party and party != "all":
-        query += " AND party = ?"
-        params.append(party)
+        if party in ("무소속/기타", "etc"):
+            query += " AND party NOT IN ('더불어민주당', '국민의힘', '조국혁신당', '진보당', '개혁신당', '기본소득당')"
+        else:
+            query += " AND party = ?"
+            params.append(party)
         
     if search and search.strip():
         search_term = f"%{search.strip()}%"
-        query += " AND (name LIKE ? OR district LIKE ? OR committee LIKE ? OR quote LIKE ?)"
-        params.extend([search_term, search_term, search_term, search_term])
+        query += " AND (name LIKE ? OR district LIKE ? OR committee LIKE ? OR party LIKE ? OR quote LIKE ? OR keywords_json LIKE ?)"
+        params.extend([search_term, search_term, search_term, search_term, search_term, search_term])
         
     query += f" ORDER BY {order_clause}"
     cursor.execute(query, params)
@@ -122,19 +140,19 @@ def get_all_members(party: Optional[str] = None, sort_by: str = "total", search:
         "cheer": "cheer_count"
     }.get(sort_by, "total_score")
 
-    score_list = [dict(r)[sort_key_attr] for r in rows]
+    score_counts = Counter(row[sort_key_attr] for row in rows)
 
     for idx, row in enumerate(rows):
         item = dict(row)
         cur_val = item[sort_key_attr]
         if idx > 0:
-            prev_val = dict(rows[idx - 1])[sort_key_attr]
+            prev_val = rows[idx - 1][sort_key_attr]
             if prev_val != cur_val:
                 current_rank = idx + 1
         else:
             current_rank = 1
 
-        is_tied = score_list.count(cur_val) > 1
+        is_tied = score_counts[cur_val] > 1
         item["rank"] = current_rank
         item["rank_text"] = f"공동 {current_rank}위" if is_tied else f"{current_rank}위"
         item["is_tied"] = is_tied
@@ -255,12 +273,20 @@ def get_summary_stats() -> Dict[str, Any]:
     
     cursor.execute("SELECT name, total_score, party FROM members ORDER BY total_score DESC LIMIT 1")
     top_member = cursor.fetchone()
-    
+
+    cursor.execute("SELECT party, COUNT(*) as cnt FROM members GROUP BY party")
+    party_counts = {row["party"]: row["cnt"] for row in cursor.fetchall()}
+    major_parties = {"더불어민주당", "국민의힘", "조국혁신당", "진보당", "개혁신당", "기본소득당"}
+    etc_count = sum(cnt for p, cnt in party_counts.items() if p not in major_parties)
+    party_counts["all"] = total_members
+    party_counts["무소속/기타"] = etc_count
+
     conn.close()
     return {
         "total_members": total_members,
         "total_cheers": total_cheers,
         "total_comments": total_comments,
         "avg_score": avg_score,
-        "top_member": dict(top_member) if top_member else None
+        "top_member": dict(top_member) if top_member else None,
+        "party_counts": party_counts,
     }

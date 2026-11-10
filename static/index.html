@@ -64,7 +64,7 @@
                     <div class="flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
                         <i class="fa-solid fa-users text-sky-500"></i>
                         <span class="text-slate-500 dark:text-slate-400">분석 의원:</span>
-                        <strong id="header-member-count" class="text-slate-800 dark:text-slate-200 font-bold">32명</strong>
+                        <strong id="header-member-count" class="text-slate-800 dark:text-slate-200 font-bold">299명</strong>
                     </div>
                     <div class="flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
                         <i class="fa-solid fa-heart text-rose-500"></i>
@@ -172,23 +172,26 @@
             <div class="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 pt-3 border-t border-slate-200/80 dark:border-slate-800">
                 <!-- Party Chips -->
                 <div class="flex items-center gap-1.5 overflow-x-auto pb-1" id="party-filters">
-                    <button data-party="all" class="party-chip active px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-slate-900 text-white dark:bg-white dark:text-slate-900 whitespace-nowrap">전체</button>
+                    <button data-party="all" class="party-chip active px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-slate-900 text-white dark:bg-white dark:text-slate-900 whitespace-nowrap">전체 <span class="party-count opacity-80"></span></button>
                     <button data-party="더불어민주당" class="party-chip px-3 py-1.5 rounded-lg text-xs font-medium transition-all bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-blue-500/10 hover:text-blue-600 whitespace-nowrap">
-                        <span class="inline-block w-2 h-2 rounded-full bg-blue-600 mr-1"></span>더불어민주당
+                        <span class="inline-block w-2 h-2 rounded-full bg-blue-600 mr-1"></span>더불어민주당 <span class="party-count opacity-75"></span>
                     </button>
                     <button data-party="국민의힘" class="party-chip px-3 py-1.5 rounded-lg text-xs font-medium transition-all bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-red-500/10 hover:text-red-600 whitespace-nowrap">
-                        <span class="inline-block w-2 h-2 rounded-full bg-red-600 mr-1"></span>국민의힘
+                        <span class="inline-block w-2 h-2 rounded-full bg-red-600 mr-1"></span>국민의힘 <span class="party-count opacity-75"></span>
                     </button>
                     <button data-party="조국혁신당" class="party-chip px-3 py-1.5 rounded-lg text-xs font-medium transition-all bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-sky-500/10 hover:text-sky-600 whitespace-nowrap">
-                        <span class="inline-block w-2 h-2 rounded-full bg-[#002B49] mr-1"></span>조국혁신당
+                        <span class="inline-block w-2 h-2 rounded-full bg-[#002B49] mr-1"></span>조국혁신당 <span class="party-count opacity-75"></span>
+                    </button>
+                    <button data-party="진보당" class="party-chip px-3 py-1.5 rounded-lg text-xs font-medium transition-all bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-rose-500/10 hover:text-rose-600 whitespace-nowrap">
+                        <span class="inline-block w-2 h-2 rounded-full bg-[#D6001C] mr-1"></span>진보당 <span class="party-count opacity-75"></span>
                     </button>
                     <button data-party="개혁신당" class="party-chip px-3 py-1.5 rounded-lg text-xs font-medium transition-all bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-orange-500/10 hover:text-orange-600 whitespace-nowrap">
-                        <span class="inline-block w-2 h-2 rounded-full bg-[#FF7920] mr-1"></span>개혁신당
+                        <span class="inline-block w-2 h-2 rounded-full bg-[#FF7920] mr-1"></span>개혁신당 <span class="party-count opacity-75"></span>
                     </button>
                     <button data-party="기본소득당" class="party-chip px-3 py-1.5 rounded-lg text-xs font-medium transition-all bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-teal-500/10 hover:text-teal-600 whitespace-nowrap">
-                        <span class="inline-block w-2 h-2 rounded-full bg-[#00D2C4] mr-1"></span>기본소득당
+                        <span class="inline-block w-2 h-2 rounded-full bg-[#00D2C4] mr-1"></span>기본소득당 <span class="party-count opacity-75"></span>
                     </button>
-                    <button data-party="무소속" class="party-chip px-3 py-1.5 rounded-lg text-xs font-medium transition-all bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-300 whitespace-nowrap">무소속/기타</button>
+                    <button data-party="무소속/기타" class="party-chip px-3 py-1.5 rounded-lg text-xs font-medium transition-all bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-300 whitespace-nowrap">무소속/기타 <span class="party-count opacity-75"></span></button>
                 </div>
 
                 <!-- Search Input -->
@@ -202,14 +205,24 @@
 
         <!-- Members Grid -->
         <div id="members-grid-container" class="space-y-4">
-            <div class="flex items-center justify-between text-xs text-slate-500 px-1">
-                <span>총 <strong id="filter-result-count" class="text-sky-600 dark:text-sky-400 font-bold">0</strong>명의 국회의원이 검색되었습니다.</span>
+            <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 px-1">
+                <span>총 <strong id="filter-result-count" class="text-sky-600 dark:text-sky-400 font-bold">0</strong>명의 국회의원 중 <strong id="display-showing-count" class="text-slate-700 dark:text-slate-300 font-bold">0</strong>명 표시 중</span>
                 <span class="text-[11px]"><i class="fa-solid fa-hand-pointer mr-1 text-sky-500"></i>캐리커쳐 사진 클릭 시 <strong>공식 실사진과 3D 플립</strong> 전환됩니다!</span>
             </div>
 
             <!-- The Grid -->
             <div id="members-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                 <!-- Rendered dynamically by app.js -->
+            </div>
+
+            <!-- Pagination / Load More Controls -->
+            <div id="load-more-container" class="hidden pt-4 pb-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+                <button id="btn-load-more" onclick="loadMoreMembers()" class="w-full sm:w-auto px-6 py-3 rounded-2xl text-xs sm:text-sm font-bold bg-sky-600 hover:bg-sky-500 text-white shadow-lg shadow-sky-600/25 transition-all transform active:scale-95 flex items-center justify-center space-x-2">
+                    <span id="btn-load-more-text">👇 다음 의원 더 보기 (+36명)</span>
+                </button>
+                <button id="btn-show-all" onclick="showAllMembers()" class="w-full sm:w-auto px-6 py-3 rounded-2xl text-xs sm:text-sm font-bold bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 transition-all transform active:scale-95 flex items-center justify-center space-x-2">
+                    <span id="btn-show-all-text">전체 299명 한 번에 보기</span>
+                </button>
             </div>
         </div>
 

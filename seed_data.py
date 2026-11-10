@@ -1,15 +1,17 @@
 """
-PoliRank - 국회의원 실데이터 초기 시딩 및 6대 정량 지표/재미 요소 적재 스크립트
+PoliRank - 국회의원 실데이터 초기 시딩 및 6대 정량 지표/재미 요소 적재 스크립트 (299인 풀버전 지원)
 """
+import hashlib
 import os
 import json
 import random
 from database import init_db, get_connection
 from scoring import calculate_member_scores
 
+ALL_SEED = os.path.abspath(os.path.join(os.path.dirname(__file__), "seed_data_all.json"))
 LOCAL_SEED = os.path.abspath(os.path.join(os.path.dirname(__file__), "seed_data.json"))
 FALLBACK_SEED = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "yeouido_draft", "seed_data.json"))
-SEED_JSON_PATH = LOCAL_SEED if os.path.exists(LOCAL_SEED) else FALLBACK_SEED
+SEED_JSON_PATH = ALL_SEED if os.path.exists(ALL_SEED) else (LOCAL_SEED if os.path.exists(LOCAL_SEED) else FALLBACK_SEED)
 
 # 32인 국회의원별 시그니처 대표 어록 & 키워드 해시태그 & 공식 고화질 사진 & 언론 언급수 & 표결 참여율
 MEMBER_FUN_AND_EXTRA_DATA = {
@@ -311,45 +313,67 @@ def seed():
     
     for m in members:
         name = m["name"]
-        extra = MEMBER_FUN_AND_EXTRA_DATA.get(name, {
-            "quote": "국민의 뜻을 받들어 민생과 국가 발전을 위해 최선을 다하겠습니다.",
-            "keywords": ["#국회의원", "#입법활동", "#민생우선"],
-            "media_mentions": random.randint(800, 2500),
-            "voting_rate": round(random.uniform(92.0, 99.0), 1),
-            "committee_speech_count": random.randint(5, 8),
-            "official_photo": m.get("photo_url", "")
-        })
-        
-        # stats에 표결 참여율과 발언 횟수 주입
-        weekly_stats = m.get("weekly_stats", {})
-        weekly_stats["voting_rate"] = extra["voting_rate"]
-        weekly_stats["committee_speech_count"] = extra["committee_speech_count"]
+        mona_cd = m.get("mona_cd", "")
+        weekly_stats = dict(m.get("weekly_stats", {}))
+
+        # 이미 collect_all_299.py로 정제된 quote/keywords/official_photo_url이 있으면 우선 사용
+        has_enriched = bool(m.get("quote") and m.get("keywords") and m.get("official_photo_url"))
+        if has_enriched:
+            quote = m["quote"]
+            keywords = m["keywords"]
+            media_mentions = m.get("media_mentions", random.randint(800, 2500))
+            official_photo = m.get("official_photo_url") or m.get("photo_url", "")
+            if "voting_rate" not in weekly_stats:
+                weekly_stats["voting_rate"] = round(random.uniform(85.0, 99.0), 1)
+            if "committee_speech_count" not in weekly_stats:
+                weekly_stats["committee_speech_count"] = random.randint(4, 8)
+        else:
+            use_extra = name in MEMBER_FUN_AND_EXTRA_DATA and mona_cd != "H7X3372O"
+            extra = MEMBER_FUN_AND_EXTRA_DATA[name] if use_extra else {
+                "quote": "국민의 뜻을 받들어 민생과 국가 발전을 위해 최선을 다하겠습니다.",
+                "keywords": ["#국회의원", "#입법활동", "#민생우선"],
+                "media_mentions": random.randint(800, 2500),
+                "voting_rate": round(random.uniform(92.0, 99.0), 1),
+                "committee_speech_count": random.randint(5, 8),
+                "official_photo": m.get("photo_url", ""),
+            }
+            quote = extra["quote"]
+            keywords = extra["keywords"]
+            media_mentions = extra["media_mentions"]
+            official_photo = extra["official_photo"]
+            weekly_stats["voting_rate"] = extra["voting_rate"]
+            weekly_stats["committee_speech_count"] = extra["committee_speech_count"]
+
         m["weekly_stats"] = weekly_stats
-        
+
         # 6대 지표 점수 계산
         scores = calculate_member_scores(m)
-        
-        # 공식 후원계좌
+
+        # 결정론적 공식 후원계좌 (MD5 기반)
+        digest_int = int(hashlib.md5(m["id"].encode("utf-8")).hexdigest()[:8], 16)
         bank_names = ["농협은행", "국민은행", "신한은행", "하나은행", "우리은행"]
-        bank = bank_names[abs(hash(m["name"])) % len(bank_names)]
-        acc_num = f"{301 + (abs(hash(m['name'])) % 90):03d}-{random.randint(1000, 9999)}-{random.randint(1000, 9999)}-{random.randint(11, 99)}"
+        bank = bank_names[digest_int % len(bank_names)]
+        acc_num = f"{301 + (digest_int % 90):03d}-{1000 + (digest_int % 8999):04d}-{1000 + ((digest_int >> 8) % 8999):04d}-{11 + (digest_int % 88):02d}"
         donation_account = f"{bank} {acc_num} (국회의원 {m['name']} 후원회)"
-        
+
         # 초기 실시간 응원수
-        base_cheer = int(scores["total_score"] * 1.5) + random.randint(15, 80)
+        base_cheer = int(scores["total_score"] * 1.5) + 15 + (digest_int % 65)
         recent_bills = weekly_stats.get("recent_bills", [])
-        
+        role_label = m.get("committee_role_label") or ("위원장" if m.get("committee_role") == "chair" else ("간사" if m.get("committee_role") == "secretary" else "위원"))
+
         cursor.execute("""
             INSERT INTO members (
-                id, name, hanja_name, party, party_color, district, region_type,
-                committee, committee_role, terms, age, photo_url, official_photo_url,
+                id, mona_cd, name, hanja_name, party, party_color, district, region_type,
+                committee, committee_role, committee_role_label, terms, gender, age,
+                photo_url, official_photo_url,
                 bio, quote, keywords_json, media_mentions, donation_account, cheer_count,
                 legislation_score, passed_score, attendance_score, voting_score, speech_score,
                 policy_score, voting_rate, speech_count, total_score, tier, tier_title,
                 weekly_stats_json, recent_bills_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             m["id"],
+            mona_cd,
             m["name"],
             m.get("hanja_name", ""),
             m["party"],
@@ -358,14 +382,16 @@ def seed():
             m.get("region_type", "metropolitan"),
             m.get("committee", "국회운영위원회"),
             m.get("committee_role", "member"),
+            role_label,
             m.get("terms", 1),
+            m.get("gender", "male"),
             m.get("age", 50),
-            extra["official_photo"],  # photo_url
-            extra["official_photo"],  # official_photo_url
+            official_photo,
+            official_photo,
             m.get("bio", ""),
-            extra["quote"],
-            json.dumps(extra["keywords"], ensure_ascii=False),
-            extra["media_mentions"],
+            quote,
+            json.dumps(keywords, ensure_ascii=False),
+            media_mentions,
             donation_account,
             base_cheer,
             scores["legislation_score"],
@@ -380,9 +406,9 @@ def seed():
             scores["tier"],
             scores["tier_title"],
             json.dumps(weekly_stats, ensure_ascii=False),
-            json.dumps(recent_bills, ensure_ascii=False)
+            json.dumps(recent_bills, ensure_ascii=False),
         ))
-        
+
         # 초기 댓글 2~3개 시딩
         selected_comments = random.sample(SAMPLE_COMMENTS, k=random.randint(2, 3))
         for author, stance, content in selected_comments:
@@ -395,12 +421,12 @@ def seed():
                 stance,
                 content,
                 f"-{random.randint(1, 48)} hours",
-                random.randint(1, 15)
+                random.randint(1, 15),
             ))
-            
+
     conn.commit()
     conn.close()
-    print("[+] Successfully seeded 32 members with 6 Key Metrics & Fun Factors into SQLite!")
+    print(f"[+] Successfully seeded {len(members)} members with 6 Key Metrics & Fun Factors into SQLite!")
 
 if __name__ == "__main__":
     seed()
