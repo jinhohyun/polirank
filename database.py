@@ -111,6 +111,20 @@ def init_db():
         FOREIGN KEY (member_id) REFERENCES members (id)
     );
     """)
+
+    # 1인 1의원 1회 중복 응원 방지 로그 테이블 (원본 IP 미저장, SHA-256 해시만 저장)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS cheer_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        member_id TEXT NOT NULL,
+        cookie_hash TEXT,
+        ip_ua_hash TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (member_id) REFERENCES members (id)
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_cheer_logs_member_cookie ON cheer_logs (member_id, cookie_hash);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_cheer_logs_member_ipua ON cheer_logs (member_id, ip_ua_hash);")
     
     conn.commit()
     conn.close()
@@ -347,19 +361,98 @@ def _refresh_fun_scores_in_conn(conn: sqlite3.Connection, member_id: str):
     )
 
 
-def cheer_member(member_id: str) -> int:
-    """국회의원 실시간 1클릭 응원 카운터 증가 (팬덤 지수 실시간 반영, total_score 무영향)"""
+def record_cheer_with_guard(
+    member_id: str,
+    cookie_hash: Optional[str] = None,
+    ip_ua_hash: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    3중 중복 응원 방지 검증 후 원자적으로 응원수 증가 및 팬덤 지수 실시간 재계산.
+    cookie_hash 또는 ip_ua_hash 중 하나라도 기존 응원 로그가 있으면 차단합니다.
+    """
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("UPDATE members SET cheer_count = cheer_count + 1 WHERE id = ?", (member_id,))
-    _refresh_fun_scores_in_conn(conn, member_id)
-    conn.commit()
+    try:
+        cursor.execute("BEGIN IMMEDIATE")
 
-    cursor.execute("SELECT cheer_count FROM members WHERE id = ?", (member_id,))
-    row = cursor.fetchone()
-    new_count = row["cheer_count"] if row else 0
-    conn.close()
-    return new_count
+        conditions = []
+        params: List[Any] = [member_id]
+        if cookie_hash:
+            conditions.append("cookie_hash = ?")
+            params.append(cookie_hash)
+        if ip_ua_hash:
+            conditions.append("ip_ua_hash = ?")
+            params.append(ip_ua_hash)
+
+        if conditions:
+            where_clause = " OR ".join(conditions)
+            cursor.execute(
+                f"SELECT id FROM cheer_logs WHERE member_id = ? AND ({where_clause}) LIMIT 1",
+                params,
+            )
+            if cursor.fetchone():
+                cursor.execute("SELECT cheer_count FROM members WHERE id = ?", (member_id,))
+                row = cursor.fetchone()
+                conn.rollback()
+                return {
+                    "allowed": False,
+                    "status": "already_cheered",
+                    "cheer_count": row["cheer_count"] if row else 0,
+                }
+
+        cursor.execute(
+            "INSERT INTO cheer_logs (member_id, cookie_hash, ip_ua_hash) VALUES (?, ?, ?)",
+            (member_id, cookie_hash, ip_ua_hash),
+        )
+        cursor.execute("UPDATE members SET cheer_count = cheer_count + 1 WHERE id = ?", (member_id,))
+        _refresh_fun_scores_in_conn(conn, member_id)
+        conn.commit()
+
+        cursor.execute("SELECT cheer_count, fandom_score FROM members WHERE id = ?", (member_id,))
+        row = cursor.fetchone()
+        return {
+            "allowed": True,
+            "status": "success",
+            "cheer_count": row["cheer_count"] if row else 0,
+            "fandom_score": row["fandom_score"] if row else 0.0,
+        }
+    finally:
+        conn.close()
+
+
+def get_cheered_member_ids(
+    cookie_hash: Optional[str] = None,
+    ip_ua_hash: Optional[str] = None,
+) -> List[str]:
+    """현재 식별자(cookie_hash 또는 ip_ua_hash)로 이미 응원한 의원 ID 목록 반환"""
+    conditions = []
+    params: List[Any] = []
+    if cookie_hash:
+        conditions.append("cookie_hash = ?")
+        params.append(cookie_hash)
+    if ip_ua_hash:
+        conditions.append("ip_ua_hash = ?")
+        params.append(ip_ua_hash)
+
+    if not conditions:
+        return []
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        where_clause = " OR ".join(conditions)
+        cursor.execute(f"SELECT DISTINCT member_id FROM cheer_logs WHERE {where_clause}", params)
+        return [row["member_id"] for row in cursor.fetchall()]
+    except Exception:
+        return []
+    finally:
+        conn.close()
+
+
+def cheer_member(member_id: str) -> int:
+    """국회의원 실시간 1클릭 응원 카운터 증가 (하위 호환 래퍼)"""
+    res = record_cheer_with_guard(member_id)
+    return res["cheer_count"]
 
 def get_comments(member_id: str, limit: int = 50) -> List[Dict[str, Any]]:
     """특정 의원의 토론 댓글 목록 조회"""

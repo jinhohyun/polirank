@@ -1,13 +1,15 @@
 """
 PoliRank - 국회의원 객관적 랭킹 & 커뮤니티 MVP 플랫폼 백엔드 (FastAPI) - 6대 정량 지표 & 재미요소 확장
 """
+import hashlib
 import os
 import sys
+import uuid
 from typing import Optional
-from fastapi import FastAPI, HTTPException, Query, Response
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -18,7 +20,8 @@ from database import (
     init_db,
     get_all_members,
     get_member_by_id,
-    cheer_member,
+    record_cheer_with_guard,
+    get_cheered_member_ids,
     get_comments,
     add_comment,
     get_summary_stats
@@ -29,8 +32,59 @@ from scoring import SCORING_METHODOLOGY
 app = FastAPI(
     title="PoliRank API",
     description="제22대 국회의원 299인 6대 핵심 축 · 14대 실제 공공 팩트 + 재미·화제성 랭킹 API",
-    version="3.1.0"
+    version="3.2.0"
 )
+
+VID_COOKIE_NAME = "polirank_vid"
+VID_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
+
+
+def _sha256(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _get_client_ip(request: Request) -> str:
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        first_ip = forwarded_for.split(",")[0].strip()
+        if first_ip:
+            return first_ip
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()
+    if request.client and request.client.host:
+        return request.client.host
+    return "unknown"
+
+
+def _compute_ip_ua_hash(request: Request) -> str:
+    ip = _get_client_ip(request)
+    ua = (request.headers.get("user-agent") or "unknown").strip()
+    return _sha256(f"{ip}|{ua}")
+
+
+def _resolve_visitor_cookie(request: Request) -> tuple[str, str, bool]:
+    vid = (request.cookies.get(VID_COOKIE_NAME) or "").strip()
+    if len(vid) < 12:
+        vid = str(uuid.uuid4())
+        return vid, _sha256(vid), True
+    return vid, _sha256(vid), False
+
+
+def _set_vid_cookie(resp: Response, vid: str, request: Request) -> None:
+    is_https = (
+        request.headers.get("x-forwarded-proto", "").lower() == "https"
+        or request.url.scheme == "https"
+    )
+    resp.set_cookie(
+        key=VID_COOKIE_NAME,
+        value=vid,
+        max_age=VID_COOKIE_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+        secure=is_https,
+        path="/",
+    )
 
 # CORS 설정
 app.add_middleware(
@@ -186,19 +240,68 @@ def get_member_avatar(member_id: str, size: int = 140):
     )
     return Response(content=svg_code, media_type="image/svg+xml")
 
+@app.get("/api/my-cheers")
+def read_my_cheers(request: Request, response: Response):
+    """현재 방문자(HttpOnly 쿠키 + IP/UA 해시)가 이미 응원한 의원 ID 목록 반환"""
+    vid, cookie_hash, is_new = _resolve_visitor_cookie(request)
+    ip_ua_hash = _compute_ip_ua_hash(request)
+    cheered_ids = get_cheered_member_ids(
+        cookie_hash=None if is_new else cookie_hash,
+        ip_ua_hash=ip_ua_hash,
+    )
+    if is_new:
+        _set_vid_cookie(response, vid, request)
+    return {
+        "status": "success",
+        "cheered_member_ids": cheered_ids,
+        "count": len(cheered_ids),
+    }
+
+
 @app.post("/api/members/{member_id}/cheer")
-def cheer(member_id: str):
-    """실시간 1클릭 응원 카운터 증가"""
+def cheer(member_id: str, request: Request):
+    """실시간 1인 1의원 1회 중복방지 응원 카운터 증가"""
     member = get_member_by_id(member_id)
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
-    new_count = cheer_member(member_id)
-    return {
-        "status": "success",
-        "member_id": member_id,
-        "name": member["name"],
-        "cheer_count": new_count
-    }
+
+    vid, cookie_hash, is_new = _resolve_visitor_cookie(request)
+    ip_ua_hash = _compute_ip_ua_hash(request)
+
+    result = record_cheer_with_guard(
+        member_id=member_id,
+        cookie_hash=cookie_hash,
+        ip_ua_hash=ip_ua_hash,
+    )
+
+    if not result.get("allowed"):
+        resp = JSONResponse(
+            status_code=409,
+            content={
+                "status": "already_cheered",
+                "message": "이미 응원하신 의원입니다. (1인 1의원 1회 제한)",
+                "member_id": member_id,
+                "name": member["name"],
+                "cheer_count": result["cheer_count"],
+            },
+        )
+        if is_new:
+            _set_vid_cookie(resp, vid, request)
+        return resp
+
+    resp = JSONResponse(
+        status_code=200,
+        content={
+            "status": "success",
+            "member_id": member_id,
+            "name": member["name"],
+            "cheer_count": result["cheer_count"],
+            "fandom_score": result.get("fandom_score"),
+        },
+    )
+    if is_new:
+        _set_vid_cookie(resp, vid, request)
+    return resp
 
 @app.get("/api/members/{member_id}/comments")
 def read_comments(member_id: str, limit: int = 50):

@@ -228,7 +228,7 @@ def calculate_fun_metrics(
     c_stats = comment_stats or {}
 
     resolved_total = float(total_score if total_score is not None else member_data.get("total_score", 65.0))
-    resolved_cheer = int(cheer_count if cheer_count is not None else member_data.get("cheer_count", 100))
+    resolved_cheer = int(cheer_count if cheer_count is not None else member_data.get("cheer_count", 0))
 
     tot_comments = sum(int(v) for v in c_stats.values())
     cheer_comments = int(c_stats.get("cheer", 0))
@@ -244,14 +244,14 @@ def calculate_fun_metrics(
     v_abs = int(vb.get("기권", 0))
     v_rate = float(ws.get("voting_rate", member_data.get("voting_rate", 80.0)))
 
-    # 1. 🔥 인기·팬덤 지수 (fandom_score, 0~100)
+    # 1. 🔥 인기·팬덤 지수 (fandom_score, 0~100) — 초기 0표 시 뉴스 화제성 기반, 1/5/10표 유입 시 민감 상승
     news_buzz = min(100.0, (math.log1p(news_cnt) / math.log1p(75.0)) * 100.0)
     media_buzz = min(100.0, (math.log1p(media_mentions) / math.log1p(4800.0)) * 100.0)
-    cheer_norm = min(100.0, (math.log1p(resolved_cheer) / math.log1p(400.0)) * 100.0)
-    cheer_comm_norm = ((cheer_comments + 2.0) / (tot_comments + 4.0)) * 100.0
+    cheer_norm = 0.0 if resolved_cheer <= 0 else min(100.0, (math.log1p(resolved_cheer * 3.0) / math.log1p(300.0)) * 100.0)
+    cheer_comm_norm = 0.0 if tot_comments == 0 else ((cheer_comments / (tot_comments + 2.0)) * 100.0)
     fandom_score = min(
         100.0,
-        max(0.0, (news_buzz * 0.42) + (media_buzz * 0.25) + (cheer_norm * 0.23) + (cheer_comm_norm * 0.10)),
+        max(0.0, (news_buzz * 0.38) + (media_buzz * 0.17) + (cheer_norm * 0.35) + (cheer_comm_norm * 0.10)),
     )
 
     # 2. ⚡ 논란·핫이슈 온도 (controversy_score, 0~100°C)

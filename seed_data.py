@@ -284,7 +284,7 @@ SAMPLE_COMMENTS = [
 ]
 
 def seed(preserve_user_data: bool = False):
-    print(f"[*] Initializing PoliRank v3.1 DB (preserve_user_data={preserve_user_data})...")
+    print(f"[*] Initializing PoliRank v3.2 DB (preserve_user_data={preserve_user_data})...")
     init_db()
 
     if not os.path.exists(SEED_JSON_PATH):
@@ -328,6 +328,7 @@ def seed(preserve_user_data: bool = False):
         cursor = conn.cursor()
         cursor.execute("DROP TABLE IF EXISTS members")
         cursor.execute("DROP TABLE IF EXISTS comments")
+        cursor.execute("DROP TABLE IF EXISTS cheer_logs")
         conn.commit()
         conn.close()
 
@@ -383,31 +384,13 @@ def seed(preserve_user_data: bool = False):
         acc_num = f"{301 + (digest_int % 90):03d}-{1000 + (digest_int % 8999):04d}-{1000 + ((digest_int >> 8) % 8999):04d}-{11 + (digest_int % 88):02d}"
         donation_account = f"{bank} {acc_num} (국회의원 {m['name']} 후원회)"
 
-        # 유저 응원 보존 또는 초기 응원수 산출
-        base_cheer = int(scores["total_score"] * 1.5) + 15 + (digest_int % 65)
-        cheer_count = max(existing_cheers.get(m["id"], 0), base_cheer) if preserve_user_data else base_cheer
+        # v3.2: 실제 유저 응원만 보존하고 초기 응원수는 전부 0으로 시작 (가짜 응원수 제거)
+        cheer_count = int(existing_cheers.get(m["id"], 0)) if preserve_user_data else 0
         recent_bills = weekly_stats.get("recent_bills", [])
         role_label = m.get("committee_role_label") or ("위원장" if m.get("committee_role") == "chair" else ("간사" if m.get("committee_role") == "secretary" else "위원"))
 
-        # 댓글 시딩 (신규 의원이거나 preserve_user_data=False인 경우만)
-        if not preserve_user_data or existing_comment_counts.get(m["id"], 0) == 0:
-            selected_comments = random.sample(SAMPLE_COMMENTS, k=random.randint(2, 3))
-            c_stances = {}
-            for author, stance, content in selected_comments:
-                c_stances[stance] = c_stances.get(stance, 0) + 1
-                cursor.execute("""
-                    INSERT INTO comments (member_id, author, stance, content, created_at, likes)
-                    VALUES (?, ?, ?, ?, datetime('now', ?), ?)
-                """, (
-                    m["id"],
-                    author,
-                    stance,
-                    content,
-                    f"-{random.randint(1, 48)} hours",
-                    random.randint(1, 15),
-                ))
-        else:
-            c_stances = existing_comment_stances.get(m["id"], {})
+        # v3.2: 가짜 샘플 댓글 생성 완전 제거 — 실제 유저 댓글만 보존/집계
+        c_stances = existing_comment_stances.get(m["id"], {}) if preserve_user_data else {}
 
         # 재미·화제성 지표 산출 (total_score와 완전 독립)
         news_30d = int(m.get("news_30d_count", weekly_stats.get("news_30d_count", 0)))
@@ -484,7 +467,7 @@ def seed(preserve_user_data: bool = False):
     kst = timezone(timedelta(hours=9))
     now_kst = datetime.now(kst).strftime("%Y-%m-%d %H:%M KST")
     set_metadata("last_updated_at", now_kst)
-    print(f"[+] Successfully seeded {len(members)} members (v3.1) at {now_kst}!")
+    print(f"[+] Successfully seeded {len(members)} members (v3.2 clean cheers/comments=0) at {now_kst}!")
 
 if __name__ == "__main__":
     seed()

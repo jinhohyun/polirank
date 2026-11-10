@@ -1,15 +1,18 @@
 """
-PoliRank v3.0 - 6대 핵심 축, 14대 실제 공공 팩트 지표, 공동순위, 299인 SVG 단위 및 통합 검증 테스트
+PoliRank v3.2 - 6대 핵심 축, 14대 실제 공공 팩트 지표, 재미 랭킹 격리 및 3중 중복 응원 방지 검증 테스트
 """
 import os
 import sys
+import tempfile
 import unittest
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 if CURRENT_DIR not in sys.path:
     sys.path.insert(0, CURRENT_DIR)
 
+import database as db_module
 from database import init_db, get_all_members, get_connection
+from seed_data import seed
 from scoring import calculate_member_scores, calculate_fun_metrics
 from avatar_generator import generate_caricature_svg
 from starlette.testclient import TestClient
@@ -19,8 +22,21 @@ from app import app
 class TestPoliRankV3(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        init_db()
+        cls._orig_db_path = db_module.DB_PATH
+        cls._tmp_dir = tempfile.TemporaryDirectory()
+        cls._test_db_path = os.path.join(cls._tmp_dir.name, "test_polirank.db")
+        db_module.DB_PATH = cls._test_db_path
+        seed(preserve_user_data=False)
         cls.client = TestClient(app)
+
+    @classmethod
+    def tearDownClass(cls):
+        try:
+            cls.client.close()
+        except Exception:
+            pass
+        db_module.DB_PATH = cls._orig_db_path
+        cls._tmp_dir.cleanup()
 
     def test_01_v3_six_axes_and_quality_hierarchy(self):
         """v3.0 6대 핵심 축 가중치(30/20/15/15/12/8) 및 양치기 vs 실속협치 변별력 검증"""
@@ -146,6 +162,8 @@ class TestPoliRankV3(unittest.TestCase):
         self.assertEqual(res_js.status_code, 200)
         self.assertIn("renderModalFactSheet14", res_js.text)
         self.assertIn("renderModalNews", res_js.text)
+        self.assertIn("loadMyCheers", res_js.text)
+        self.assertIn("already_cheered", res_js.text)
         self.assertIn('loading="lazy"', res_js.text)
         self.assertIn("PAGE_SIZE = 36", res_js.text)
 
@@ -159,10 +177,12 @@ class TestPoliRankV3(unittest.TestCase):
         self.assertEqual(res_stats.status_code, 200)
         data = res_stats.json()
         self.assertGreaterEqual(data["total_members"], 290)
+        self.assertEqual(data["total_cheers"], 0)
+        self.assertEqual(data["total_comments"], 0)
         self.assertEqual(data["party_counts"]["all"], data["total_members"])
         self.assertIn("last_updated_at", data)
         self.assertIn("update_schedule", data)
-        print(f"[PASS] UI v3.1, /methodology page, & Stats API verified: {data['total_members']} members (updated: {data['last_updated_at']}).")
+        print(f"[PASS] UI v3.2 Clean Zero State, /methodology & Stats API verified: {data['total_members']} members, cheers=0, comments=0.")
 
     def test_04_api_member_ranking_core_and_fun_sorts(self):
         """v3.1 본질 6대 축 + 재미 랭킹 3종(인기·논란·흙속의진주) 정렬 및 공동순위 검증"""
@@ -255,23 +275,36 @@ class TestPoliRankV3(unittest.TestCase):
         )
 
     def test_06_cheer_comment_and_total_score_isolation(self):
-        """실시간 응원/댓글 및 재미 지표가 total_score에 영향을 주지 않는 완전 격리 불변성 검증"""
+        """실시간 응원/댓글 및 fandom_score 민감도가 total_score에 영향을 주지 않는 완전 격리 검증"""
         res = self.client.get("/api/members")
         member = res.json()["members"][0]
         member_id = member["id"]
         old_cheer = member["cheer_count"]
         old_total = member["total_score"]
+        self.assertEqual(old_cheer, 0)
 
-        # 재미 지표 단위 계산 불변성 검증 (뉴스·응원이 극단적으로 달라져도 total_score는 불변)
-        fun_low = calculate_fun_metrics({"news_30d_count": 2, "media_mentions": 100}, total_score=old_total, cheer_count=10)
-        fun_high = calculate_fun_metrics({"news_30d_count": 90, "controversy_news_count": 40, "media_mentions": 8000}, total_score=old_total, cheer_count=5000)
+        # v3.2: 0표 / 1표 / 5표 / 10표 증가에 따른 fandom_score 체감 상승 검증
+        sample_m = {"news_30d_count": 10, "media_mentions": 500}
+        f0 = calculate_fun_metrics(sample_m, total_score=old_total, cheer_count=0)["fandom_score"]
+        f1 = calculate_fun_metrics(sample_m, total_score=old_total, cheer_count=1)["fandom_score"]
+        f5 = calculate_fun_metrics(sample_m, total_score=old_total, cheer_count=5)["fandom_score"]
+        f10 = calculate_fun_metrics(sample_m, total_score=old_total, cheer_count=10)["fandom_score"]
+        self.assertLess(f0, f1)
+        self.assertLess(f1, f5)
+        self.assertLess(f5, f10)
+
+        fun_low = calculate_fun_metrics({"news_30d_count": 2, "media_mentions": 100}, total_score=old_total, cheer_count=0)
+        fun_high = calculate_fun_metrics({"news_30d_count": 90, "controversy_news_count": 40, "media_mentions": 8000}, total_score=old_total, cheer_count=100)
         self.assertGreater(fun_high["fandom_score"], fun_low["fandom_score"])
         self.assertGreater(fun_high["controversy_score"], fun_low["controversy_score"])
 
-        res_cheer = self.client.post(f"/api/members/{member_id}/cheer")
+        res_cheer = self.client.post(
+            f"/api/members/{member_id}/cheer",
+            headers={"User-Agent": "IsolationTest/1.0", "X-Forwarded-For": "192.0.2.10"},
+        )
         self.assertEqual(res_cheer.status_code, 200)
         new_cheer = res_cheer.json()["cheer_count"]
-        self.assertEqual(new_cheer, old_cheer + 1)
+        self.assertEqual(new_cheer, 1)
 
         res_comment = self.client.post(
             f"/api/members/{member_id}/comments",
@@ -285,18 +318,98 @@ class TestPoliRankV3(unittest.TestCase):
         comment_id = res_comment.json()["comment"]["id"]
         self.assertIsNotNone(comment_id)
 
-        # 응원/댓글 이후에도 total_score 불변 확인
         after_detail = self.client.get(f"/api/members/{member_id}").json()
         self.assertEqual(after_detail["total_score"], old_total)
+        self.assertGreater(after_detail["fandom_score"], member["fandom_score"])
+        print(
+            f"[PASS] Cheer, Comment & total_score Isolation verified (Cheer: {old_cheer}->{new_cheer}, fandom: {f0}->{f1}->{f5}->{f10}, total_score={old_total} unchanged)"
+        )
+
+    def test_07_duplicate_cheer_three_layer_guard(self):
+        """1인 1의원 1회 중복 응원 방지 (HttpOnly 쿠키 + IP/UA 해시 + /api/my-cheers) 검증"""
+        members = self.client.get("/api/members").json()["members"]
+        target = members[2]
+        mid = target["id"]
+        self.assertEqual(target["cheer_count"], 0)
+
+        # 1) 방문자 A 첫 조회 및 응원 -> 0 -> 1 성공 + HttpOnly 쿠키 발급
+        headers_a = {"User-Agent": "Chrome-Visitor-A/120.0", "X-Forwarded-For": "203.0.113.10"}
+        client_a = TestClient(app)
+        my_before = client_a.get("/api/my-cheers", headers=headers_a)
+        self.assertEqual(my_before.status_code, 200)
+        self.assertNotIn(mid, my_before.json()["cheered_member_ids"])
+        self.assertIn("polirank_vid", client_a.cookies)
+
+        res_ok = client_a.post(f"/api/members/{mid}/cheer", headers=headers_a)
+        self.assertEqual(res_ok.status_code, 200)
+        self.assertEqual(res_ok.json()["status"], "success")
+        self.assertEqual(res_ok.json()["cheer_count"], 1)
+
+        my_after = client_a.get("/api/my-cheers", headers=headers_a)
+        self.assertIn(mid, my_after.json()["cheered_member_ids"])
+
+        # 2) 동일 쿠키로 연타 시 409 차단 및 카운트 유지
+        res_dup_cookie = client_a.post(f"/api/members/{mid}/cheer", headers=headers_a)
+        self.assertEqual(res_dup_cookie.status_code, 409)
+        self.assertEqual(res_dup_cookie.json()["status"], "already_cheered")
+        self.assertEqual(res_dup_cookie.json()["cheer_count"], 1)
+
+        # 3) 쿠키 삭제 / 시크릿창 (새 TestClient, 동일 IP + 동일 UA) -> ip_ua_hash로 409 차단
+        client_a_incognito = TestClient(app)
+        my_incog = client_a_incognito.get("/api/my-cheers", headers=headers_a)
+        self.assertIn(mid, my_incog.json()["cheered_member_ids"])
+        res_dup_ipua = client_a_incognito.post(f"/api/members/{mid}/cheer", headers=headers_a)
+        self.assertEqual(res_dup_ipua.status_code, 409)
+        self.assertEqual(res_dup_ipua.json()["status"], "already_cheered")
+        self.assertEqual(res_dup_ipua.json()["cheer_count"], 1)
+
+        # 4) 동일 쿠키 유지 상태에서 IP/UA 헤더 변경 시도 -> cookie_hash로 409 차단
+        res_spoof = client_a.post(
+            f"/api/members/{mid}/cheer",
+            headers={"User-Agent": "SpoofedBrowser/9.9", "X-Forwarded-For": "198.51.100.88"},
+        )
+        self.assertEqual(res_spoof.status_code, 409)
+        self.assertEqual(res_spoof.json()["cheer_count"], 1)
+
+        # 5) 실제 다른 IP + 다른 브라우저 방문자 B -> 정상 1 -> 2 증가 허용
+        headers_b = {"User-Agent": "Safari-Visitor-B/17.0", "X-Forwarded-For": "203.0.113.99"}
+        client_b = TestClient(app)
+        my_b = client_b.get("/api/my-cheers", headers=headers_b)
+        self.assertNotIn(mid, my_b.json()["cheered_member_ids"])
+        res_b = client_b.post(f"/api/members/{mid}/cheer", headers=headers_b)
+        self.assertEqual(res_b.status_code, 200)
+        self.assertEqual(res_b.json()["status"], "success")
+        self.assertEqual(res_b.json()["cheer_count"], 2)
+
+        client_a.close()
+        client_a_incognito.close()
+        client_b.close()
+        print(f"[PASS] 3-Layer Duplicate Cheer Prevention verified for {target['name']}: 0->1, same cookie 409, cleared cookie 409, IP/UA spoof 409, visitor B 1->2.")
+
+    def test_08_preserve_real_user_data_on_weekly_seed(self):
+        """주간 자동 업데이트(seed preserve_user_data=True) 시 실제 유저 응원/댓글/cheer_logs 100% 보존 검증"""
+        conn = get_connection()
+        before_cheers = conn.execute("SELECT COALESCE(SUM(cheer_count), 0) FROM members").fetchone()[0]
+        before_comments = conn.execute("SELECT COUNT(*) FROM comments").fetchone()[0]
+        before_logs = conn.execute("SELECT COUNT(*) FROM cheer_logs").fetchone()[0]
+        conn.close()
+
+        self.assertGreater(before_cheers, 0)
+        self.assertGreater(before_comments, 0)
+        self.assertGreater(before_logs, 0)
+
+        seed(preserve_user_data=True)
 
         conn = get_connection()
-        conn.execute("DELETE FROM comments WHERE id = ?", (comment_id,))
-        conn.execute("UPDATE members SET cheer_count = ? WHERE id = ?", (old_cheer, member_id))
-        from database import _refresh_fun_scores_in_conn
-        _refresh_fun_scores_in_conn(conn, member_id)
-        conn.commit()
+        after_cheers = conn.execute("SELECT COALESCE(SUM(cheer_count), 0) FROM members").fetchone()[0]
+        after_comments = conn.execute("SELECT COUNT(*) FROM comments").fetchone()[0]
+        after_logs = conn.execute("SELECT COUNT(*) FROM cheer_logs").fetchone()[0]
         conn.close()
-        print(f"[PASS] Cheer, Comment & total_score Isolation verified (Cheer: {old_cheer}->{new_cheer}, total_score={old_total} unchanged)")
+
+        self.assertEqual(after_cheers, before_cheers)
+        self.assertEqual(after_comments, before_comments)
+        self.assertEqual(after_logs, before_logs)
+        print(f"[PASS] Weekly seed(preserve_user_data=True) lossless preservation verified: cheers={after_cheers}, comments={after_comments}, logs={after_logs}")
 
 
 if __name__ == "__main__":

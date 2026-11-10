@@ -15,6 +15,9 @@ let searchQuery = '';
 let currentMember = null;
 let radarChartInstance = null;
 let isModalPhotoView = false;
+const CHEER_STORAGE_KEY = 'polirank_cheered_members';
+let cheeredSet = new Set();
+const cheerInFlight = new Set();
 
 // DOM Elements
 const membersGrid = document.getElementById('members-grid');
@@ -49,7 +52,9 @@ const SORT_LABELS = {
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
+    loadLocalCheers();
     loadSummaryStats();
+    loadMyCheers();
     loadMembers();
     setupEventListeners();
 });
@@ -624,10 +629,7 @@ function createMemberCardElement(member, displayRank, rankText, isTied) {
 
         <!-- Action Buttons -->
         <div class="pt-2 border-t border-slate-200/60 dark:border-slate-800 flex items-center justify-between gap-1.5">
-            <button onclick="handleCheer(event, '${member.id}')" class="cheer-btn flex-1 py-1.5 px-2 rounded-xl text-xs font-bold bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-900/40 transition-all flex items-center justify-center space-x-1 relative">
-                <i class="fa-solid fa-heart text-[11px]"></i>
-                <span class="cheer-label-${member.id}">${member.cheer_count}</span>
-            </button>
+            ${renderCardCheerButton(member.id, member.cheer_count)}
             <button onclick="copyAccountDirect(event, '${member.donation_account}')" title="공식 후원계좌 1초 복사" class="py-1.5 px-2.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all">
                 <i class="fa-solid fa-hand-holding-dollar text-amber-500"></i>
             </button>
@@ -641,32 +643,170 @@ function createMemberCardElement(member, displayRank, rankText, isTied) {
     return card;
 }
 
-// 1-Click Live Cheer Handler
-async function handleCheer(e, memberId) {
-    e.stopPropagation();
-    spawnFloatingHeart(e.clientX, e.clientY);
-
-    const cheerLabels = document.querySelectorAll(`.cheer-label-${memberId}`);
-    cheerLabels.forEach(el => {
-        el.textContent = parseInt(el.textContent || 0) + 1;
-    });
-
+// LocalStorage + Server /api/my-cheers Sync Helpers (v3.2 1-Person 1-Cheer)
+function loadLocalCheers() {
     try {
-        const res = await fetch(`/api/members/${memberId}/cheer`, { method: 'POST' });
-        const data = await res.json();
-        if (data.status === 'success') {
-            cheerLabels.forEach(el => {
-                el.textContent = data.cheer_count;
+        const raw = localStorage.getItem(CHEER_STORAGE_KEY);
+        if (!raw) return;
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) {
+            arr.forEach(id => {
+                if (typeof id === 'string' && id) cheeredSet.add(id);
             });
-            const modalCheerCount = document.getElementById('modal-cheer-count');
-            if (modalCheerCount && currentMember && currentMember.id === memberId) {
-                modalCheerCount.textContent = data.cheer_count;
-            }
-            loadSummaryStats();
-            showToast(`${data.name} 의원에게 응원을 보냈습니다! 💖`, 'success');
         }
     } catch (err) {
+        console.warn('Failed to parse local cheers', err);
+    }
+}
+
+function saveLocalCheers() {
+    try {
+        localStorage.setItem(CHEER_STORAGE_KEY, JSON.stringify([...cheeredSet]));
+    } catch (err) {
+        console.warn('Failed to save local cheers', err);
+    }
+}
+
+async function loadMyCheers() {
+    try {
+        const res = await fetch('/api/my-cheers', { credentials: 'same-origin' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (Array.isArray(data.cheered_member_ids)) {
+            data.cheered_member_ids.forEach(id => {
+                if (typeof id === 'string' && id) cheeredSet.add(id);
+            });
+            saveLocalCheers();
+            updateCheerButtonsUI();
+        }
+    } catch (err) {
+        console.warn('Failed to sync server cheers', err);
+    }
+}
+
+function getCardCheerButtonConfig(memberId, count) {
+    const isCheered = cheeredSet.has(memberId);
+    const className = isCheered
+        ? 'cheer-btn flex-1 py-1.5 px-2 rounded-xl text-xs font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700/60 transition-all flex items-center justify-center space-x-1 relative'
+        : 'cheer-btn flex-1 py-1.5 px-2 rounded-xl text-xs font-bold bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-900/40 transition-all flex items-center justify-center space-x-1 relative';
+    const innerHTML = isCheered
+        ? `<span>💖</span><span>응원완료</span><span class="cheer-label-${memberId}">${count}</span>`
+        : `<i class="fa-solid fa-heart text-[11px]"></i><span class="cheer-label-${memberId}">${count}</span>`;
+    return { isCheered, className, innerHTML };
+}
+
+function renderCardCheerButton(memberId, count) {
+    const cfg = getCardCheerButtonConfig(memberId, count);
+    return `<button data-cheer-btn="${memberId}" aria-pressed="${cfg.isCheered}" onclick="handleCheer(event, '${memberId}')" class="${cfg.className}">${cfg.innerHTML}</button>`;
+}
+
+function syncMemberCheerCount(memberId, serverCount, fandomScore = null) {
+    const numericCount = Number(serverCount ?? 0);
+    const matched = allMembers.find(m => m.id === memberId);
+    if (matched) {
+        matched.cheer_count = numericCount;
+        if (fandomScore !== null && fandomScore !== undefined) {
+            matched.fandom_score = fandomScore;
+        }
+    }
+    const matchedFiltered = filteredMembers.find(m => m.id === memberId);
+    if (matchedFiltered) {
+        matchedFiltered.cheer_count = numericCount;
+        if (fandomScore !== null && fandomScore !== undefined) {
+            matchedFiltered.fandom_score = fandomScore;
+        }
+    }
+    if (currentMember && currentMember.id === memberId) {
+        currentMember.cheer_count = numericCount;
+        if (fandomScore !== null && fandomScore !== undefined) {
+            currentMember.fandom_score = fandomScore;
+        }
+    }
+    document.querySelectorAll(`.cheer-label-${memberId}`).forEach(el => {
+        el.textContent = numericCount;
+    });
+    const modalCheerCount = document.getElementById('modal-cheer-count');
+    if (modalCheerCount && currentMember && currentMember.id === memberId) {
+        modalCheerCount.textContent = numericCount;
+    }
+}
+
+function updateCheerButtonsUI(targetMemberId = null) {
+    const selector = targetMemberId ? `[data-cheer-btn="${targetMemberId}"]` : '[data-cheer-btn]';
+    document.querySelectorAll(selector).forEach(btn => {
+        const mid = btn.getAttribute('data-cheer-btn');
+        if (!mid) return;
+        const labelEl = btn.querySelector(`.cheer-label-${mid}`);
+        const matched = allMembers.find(m => m.id === mid);
+        const count = labelEl ? labelEl.textContent : (matched ? matched.cheer_count : 0);
+        const cfg = getCardCheerButtonConfig(mid, count);
+        btn.className = cfg.className;
+        btn.setAttribute('aria-pressed', String(cfg.isCheered));
+        btn.innerHTML = cfg.innerHTML;
+    });
+
+    const modalBtn = document.getElementById('modal-cheer-btn');
+    if (modalBtn && currentMember && (!targetMemberId || currentMember.id === targetMemberId)) {
+        const isCheered = cheeredSet.has(currentMember.id);
+        const modalCount = document.getElementById('modal-cheer-count')?.textContent ?? currentMember.cheer_count ?? 0;
+        modalBtn.className = isCheered
+            ? 'px-4 py-2 rounded-xl text-xs font-bold bg-emerald-500/15 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-300 border border-emerald-400/50 transition-all flex items-center space-x-1.5 relative'
+            : 'px-4 py-2 rounded-xl text-xs font-bold bg-rose-500 hover:bg-rose-600 text-white transition-all transform active:scale-95 shadow-md shadow-rose-500/25 flex items-center space-x-1.5 relative';
+        modalBtn.setAttribute('aria-pressed', String(isCheered));
+        modalBtn.innerHTML = isCheered
+            ? `<span>💖</span><span id="modal-cheer-label">응원완료</span><span id="modal-cheer-count" class="font-bold">${modalCount}</span>`
+            : `<i class="fa-solid fa-heart"></i><span id="modal-cheer-label">응원하기</span><span id="modal-cheer-count" class="font-bold">${modalCount}</span>`;
+    }
+}
+
+// 1-Click Live Cheer Handler (Server-Verified 1-Person 1-Cheer, No Unverified Optimistic +1)
+async function handleCheer(e, memberId) {
+    e.stopPropagation();
+
+    if (cheeredSet.has(memberId)) {
+        showToast('이미 이 의원을 응원하셨습니다! (중복 응원 방지: 의원당 1회)', 'info');
+        return;
+    }
+    if (cheerInFlight.has(memberId)) {
+        return;
+    }
+
+    cheerInFlight.add(memberId);
+    try {
+        const res = await fetch(`/api/members/${memberId}/cheer`, {
+            method: 'POST',
+            credentials: 'same-origin'
+        });
+        const data = await res.json();
+
+        if (res.status === 409 || data.status === 'already_cheered') {
+            cheeredSet.add(memberId);
+            saveLocalCheers();
+            if (data.cheer_count !== undefined) {
+                syncMemberCheerCount(memberId, data.cheer_count);
+            }
+            updateCheerButtonsUI(memberId);
+            showToast('이미 이 의원을 응원하셨습니다! (중복 응원 방지: 의원당 1회)', 'info');
+            return;
+        }
+
+        if (res.ok && data.status === 'success') {
+            spawnFloatingHeart(e.clientX, e.clientY);
+            cheeredSet.add(memberId);
+            saveLocalCheers();
+            syncMemberCheerCount(memberId, data.cheer_count, data.fandom_score);
+            updateCheerButtonsUI(memberId);
+            loadSummaryStats();
+            showToast(`${data.name} 의원에게 응원을 보냈습니다! 💖`, 'success');
+            return;
+        }
+
+        showToast(data.message || '응원 처리 중 오류가 발생했습니다.', 'error');
+    } catch (err) {
         console.error('Cheer failed', err);
+        showToast('네트워크 오류로 응원을 반영하지 못했습니다.', 'error');
+    } finally {
+        cheerInFlight.delete(memberId);
     }
 }
 
@@ -781,6 +921,7 @@ async function openModal(memberId) {
 
         document.getElementById('modal-donation-account').textContent = member.donation_account || '선관위 정치후원금센터 참조';
         document.getElementById('modal-cheer-count').textContent = member.cheer_count;
+        updateCheerButtonsUI(member.id);
 
         renderModalBills(member.recent_bills || []);
         renderRadarChart(member);
