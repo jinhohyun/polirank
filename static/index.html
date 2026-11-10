@@ -48,7 +48,7 @@
                     <div>
                         <div class="flex items-center space-x-2">
                             <span class="text-xl sm:text-2xl font-black tracking-tight bg-gradient-to-r from-sky-500 via-indigo-500 to-rose-500 bg-clip-text text-transparent">PoliRank</span>
-                            <span class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">v3.3 · 팩트+의원실</span>
+                            <span class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">v3.4 · 팩트+소통</span>
                         </div>
                         <p class="text-xs text-slate-500 dark:text-slate-400 font-medium hidden sm:block">제22대 국회 6대 핵심 축 · 14대 공공 팩트 + 화제성 랭킹</p>
                     </div>
@@ -74,19 +74,30 @@
                 </div>
 
                 <!-- Header Actions -->
-                <div class="flex items-center space-x-2 sm:space-x-3">
+                <div class="flex items-center space-x-1.5 sm:space-x-2">
                     <!-- Dedicated Methodology Page Link -->
-                    <a href="/methodology" class="inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 hover:bg-sky-100 dark:hover:bg-sky-900/60 transition-all border border-sky-200 dark:border-sky-900/50">
+                    <a href="/methodology" class="inline-flex items-center space-x-1 px-2.5 py-2 rounded-xl text-xs font-semibold bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 hover:bg-sky-100 dark:hover:bg-sky-900/60 transition-all border border-sky-200 dark:border-sky-900/50 whitespace-nowrap">
                         <span>📐</span>
-                        <span class="hidden sm:inline">점수 산출 방식</span>
-                        <span class="sm:hidden">산출방식</span>
+                        <span class="hidden md:inline">산출방식</span>
                     </a>
+
+                    <!-- Developer Support & Feedback Quick Buttons -->
+                    <button onclick="openDevSupportModal()" class="inline-flex items-center space-x-1 px-2.5 py-2 rounded-xl text-xs font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/60 transition-all border border-amber-200 dark:border-amber-800/50 whitespace-nowrap" title="개발자에게 커피 후원하기">
+                        <span>☕</span>
+                        <span class="hidden xl:inline">개발자 후원</span>
+                        <span class="hidden sm:inline xl:hidden">후원</span>
+                    </button>
+                    <button onclick="openFeedbackModal()" class="inline-flex items-center space-x-1 px-2.5 py-2 rounded-xl text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-all border border-emerald-200 dark:border-emerald-800/50 whitespace-nowrap" title="개발자에게 의견·오류·제휴 보내기">
+                        <span>✉️</span>
+                        <span class="hidden xl:inline">의견 보내기</span>
+                        <span class="hidden sm:inline xl:hidden">의견</span>
+                    </button>
 
                     <!-- Central Election Commission Donation Link -->
                     <a href="https://give.go.kr" target="_blank" rel="noopener noreferrer" 
-                       class="hidden md:inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/60 transition-all border border-rose-200 dark:border-rose-900/50">
+                       class="hidden 2xl:inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/60 transition-all border border-rose-200 dark:border-rose-900/50 whitespace-nowrap">
                         <i class="fa-solid fa-hand-holding-dollar"></i>
-                        <span>선관위 공식 후원센터</span>
+                        <span>선관위 후원</span>
                         <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
                     </a>
 
@@ -274,6 +285,33 @@
         </div>
 
     </main>
+
+    <!-- Footer with Developer Support & Feedback CTA -->
+    <footer class="border-t border-slate-200/80 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm mt-8">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-500 dark:text-slate-400">
+            <div class="text-center md:text-left space-y-1">
+                <div class="flex items-center justify-center md:justify-start space-x-2">
+                    <span class="font-black text-slate-800 dark:text-slate-100">🏛️ PoliRank (폴리랭크)</span>
+                    <span class="px-2 py-0.5 rounded-full bg-slate-200/70 dark:bg-slate-800 text-[10px] font-semibold">제22대 국회 299인 공공 빅데이터</span>
+                </div>
+                <p>열린국회정보 의정·입법·표결 공식 API와 뉴스 데이터 기반의 비영리·독립 시민 정보 서비스입니다.</p>
+            </div>
+            <div class="flex flex-wrap items-center justify-center gap-2">
+                <button onclick="openDevSupportModal()" class="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-400/40 transition-all">
+                    <span>☕</span>
+                    <span>개발자에게 후원하기</span>
+                </button>
+                <button onclick="openFeedbackModal()" class="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 border border-emerald-400/40 transition-all">
+                    <span>✉️</span>
+                    <span>의견 · 오류 · 제휴 보내기</span>
+                </button>
+                <a href="/methodology" class="inline-flex items-center space-x-1 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-colors">
+                    <span>📐</span>
+                    <span>점수 산출 방식</span>
+                </a>
+            </div>
+        </div>
+    </footer>
 
     <!-- Deep-Dive Modal (상세 6각 분석 및 커뮤니티 토론 모달) -->
     <div id="detail-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
@@ -629,71 +667,255 @@
         </div>
     </div>
 
-    <!-- Admin B2B Office Account Issue Modal -->
+    <!-- Admin Console Modal (Accounts / Feedbacks / Dev Support Settings) -->
     <div id="admin-issue-modal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-modal="true" role="dialog">
         <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-xs transition-opacity" onclick="closeAdminIssueModal()"></div>
         <div class="relative min-h-screen flex items-center justify-center p-4">
-            <div class="relative w-full max-w-xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-700 p-6 sm:p-7 space-y-5">
+            <div class="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-700 p-6 sm:p-7 space-y-5">
                 <div class="flex items-start justify-between">
                     <div class="space-y-1">
                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-400/40">
-                            ⚙️ 운영자 B2B 영업 · 파트너 관리 콘솔
+                            ⚙️ 운영자 B2B 영업 · 커뮤니티 관리 콘솔
                         </span>
-                        <h3 class="text-lg font-black text-slate-900 dark:text-white pt-1">공식 의원실 계정 발급 & 인증 관리</h3>
+                        <h3 class="text-lg font-black text-slate-900 dark:text-white pt-1">PoliRank 관리자 콘솔</h3>
                     </div>
                     <button onclick="closeAdminIssueModal()" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-rose-500 hover:text-white flex items-center justify-center transition-colors">
                         <i class="fa-solid fa-xmark"></i>
                     </button>
                 </div>
 
-                <form id="admin-issue-form" onsubmit="submitAdminIssueAccount(event)" class="space-y-3.5">
-                    <div class="space-y-1.5">
-                        <label for="admin-member-search" class="block text-xs font-bold text-slate-700 dark:text-slate-300">1. 대상 국회의원 선택 (299명)</label>
-                        <input type="text" id="admin-member-search" oninput="filterAdminMemberSelect()" placeholder="의원 이름, 정당 또는 지역구로 빠른 검색..."
-                               class="w-full text-xs px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500">
-                        <select id="admin-member-select" required
-                                class="w-full text-xs px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-800 dark:text-slate-100">
-                            <option value="">의원을 선택하세요...</option>
-                        </select>
-                    </div>
+                <!-- Admin Modal Tabs -->
+                <div class="flex flex-wrap gap-1.5 p-1 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs font-bold">
+                    <button type="button" id="admin-tab-btn-accounts" onclick="switchAdminTab('accounts')" class="flex-1 py-2 px-3 rounded-xl bg-white dark:bg-slate-900 text-sky-600 dark:text-sky-400 shadow-xs transition-all">
+                        🏛️ 의원실 계정·인증
+                    </button>
+                    <button type="button" id="admin-tab-btn-feedbacks" onclick="switchAdminTab('feedbacks')" class="flex-1 py-2 px-3 rounded-xl text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all flex items-center justify-center space-x-1.5">
+                        <span>📬 접수된 유저 의견</span>
+                        <span id="admin-feedback-count" class="px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-500/15 text-emerald-500 font-black">0</span>
+                    </button>
+                    <button type="button" id="admin-tab-btn-devsupport" onclick="switchAdminTab('devsupport')" class="flex-1 py-2 px-3 rounded-xl text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all">
+                        ☕ 개발자 후원 설정
+                    </button>
+                </div>
 
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                            <label for="admin-issue-username" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">2. 발급 아이디</label>
-                            <input type="text" id="admin-issue-username" required minlength="3" placeholder="예: office_seo_yg"
-                                   class="w-full text-xs px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500">
+                <!-- Tab 1: Office Account Issuance -->
+                <div id="admin-tab-accounts" class="space-y-4">
+                    <form id="admin-issue-form" onsubmit="submitAdminIssueAccount(event)" class="space-y-3.5">
+                        <div class="space-y-1.5">
+                            <label for="admin-member-search" class="block text-xs font-bold text-slate-700 dark:text-slate-300">1. 대상 국회의원 선택 (299명)</label>
+                            <input type="text" id="admin-member-search" oninput="filterAdminMemberSelect()" placeholder="의원 이름, 정당 또는 지역구로 빠른 검색..."
+                                   class="w-full text-xs px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500">
+                            <select id="admin-member-select" required
+                                    class="w-full text-xs px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-800 dark:text-slate-100">
+                                <option value="">의원을 선택하세요...</option>
+                            </select>
                         </div>
-                        <div>
-                            <label for="admin-issue-password" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">3. 초기 비밀번호</label>
-                            <input type="text" id="admin-issue-password" required minlength="4" placeholder="4자 이상 초기 비밀번호"
-                                   class="w-full text-xs px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500">
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label for="admin-issue-username" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">2. 발급 아이디</label>
+                                <input type="text" id="admin-issue-username" required minlength="3" placeholder="예: office_seo_yg"
+                                       class="w-full text-xs px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500">
+                            </div>
+                            <div>
+                                <label for="admin-issue-password" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">3. 초기 비밀번호</label>
+                                <input type="text" id="admin-issue-password" required minlength="4" placeholder="4자 이상 초기 비밀번호"
+                                       class="w-full text-xs px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500">
+                            </div>
+                        </div>
+
+                        <label class="flex items-center space-x-2 text-xs font-semibold text-slate-700 dark:text-slate-300 cursor-pointer">
+                            <input type="checkbox" id="admin-issue-verify" checked class="rounded border-slate-300 text-sky-600 focus:ring-sky-500">
+                            <span>발급과 동시에 <strong>✓ 공식 의원실 인증 배지</strong> 즉시 활성화</span>
+                        </label>
+
+                        <div class="flex flex-col sm:flex-row gap-2">
+                            <button type="submit" class="flex-1 py-2.5 px-4 rounded-xl text-xs font-bold bg-sky-600 hover:bg-sky-500 text-white transition-all shadow-md shadow-sky-500/20">
+                                🚀 발급 및 즉시 공식인증 부여
+                            </button>
+                            <button type="button" onclick="toggleSelectedMemberVerify()" class="py-2.5 px-3.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 transition-colors">
+                                🔄 인증 배지 토글
+                            </button>
+                        </div>
+                    </form>
+
+                    <div class="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
+                        <div class="flex items-center justify-between">
+                            <h4 class="text-xs font-bold text-slate-700 dark:text-slate-300">발급 완료된 공식 의원실 계정 목록</h4>
+                            <button type="button" onclick="loadAdminOfficeAccounts()" class="text-[11px] text-sky-500 hover:underline font-semibold">새로고침</button>
+                        </div>
+                        <div id="admin-accounts-list" class="max-h-40 overflow-y-auto space-y-1.5 text-xs">
+                            <p class="text-slate-400 text-[11px]">불러오는 중...</p>
                         </div>
                     </div>
+                </div>
 
-                    <label class="flex items-center space-x-2 text-xs font-semibold text-slate-700 dark:text-slate-300 cursor-pointer">
-                        <input type="checkbox" id="admin-issue-verify" checked class="rounded border-slate-300 text-sky-600 focus:ring-sky-500">
-                        <span>발급과 동시에 <strong>✓ 공식 의원실 인증 배지</strong> 즉시 활성화</span>
-                    </label>
-
-                    <div class="flex flex-col sm:flex-row gap-2">
-                        <button type="submit" class="flex-1 py-2.5 px-4 rounded-xl text-xs font-bold bg-sky-600 hover:bg-sky-500 text-white transition-all shadow-md shadow-sky-500/20">
-                            🚀 발급 및 즉시 공식인증 부여
-                        </button>
-                        <button type="button" onclick="toggleSelectedMemberVerify()" class="py-2.5 px-3.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 transition-colors">
-                            🔄 인증 배지 토글
-                        </button>
-                    </div>
-                </form>
-
-                <div class="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
+                <!-- Tab 2: Admin Feedback Inbox -->
+                <div id="admin-tab-feedbacks" class="hidden space-y-3">
                     <div class="flex items-center justify-between">
-                        <h4 class="text-xs font-bold text-slate-700 dark:text-slate-300">발급 완료된 공식 의원실 계정 목록</h4>
-                        <button type="button" onclick="loadAdminOfficeAccounts()" class="text-[11px] text-sky-500 hover:underline font-semibold">새로고침</button>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">사용자가 보낸 기능 제안, 데이터 오류 제보 및 의원실 제휴 문의를 확인합니다.</p>
+                        <button type="button" onclick="loadAdminFeedbacks()" class="text-[11px] text-sky-500 hover:underline font-semibold">새로고침</button>
                     </div>
-                    <div id="admin-accounts-list" class="max-h-40 overflow-y-auto space-y-1.5 text-xs">
+                    <div id="admin-feedbacks-list" class="max-h-80 overflow-y-auto space-y-2 text-xs">
                         <p class="text-slate-400 text-[11px]">불러오는 중...</p>
                     </div>
                 </div>
+
+                <!-- Tab 3: Admin Dev Support Settings -->
+                <div id="admin-tab-devsupport" class="hidden">
+                    <form id="admin-dev-support-form" onsubmit="submitAdminDevSupport(event)" class="space-y-3.5">
+                        <p class="text-xs text-slate-500 dark:text-slate-400 bg-amber-500/10 border border-amber-400/30 p-3 rounded-xl">
+                            여기서 저장한 개발자 후원 계좌와 송금 링크는 재배포 없이 즉시 서비스의 <strong>[☕ 개발자 후원]</strong> 모달에 반영됩니다.
+                        </p>
+                        <div>
+                            <label for="admin-dev-bank" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">후원 계좌 정보</label>
+                            <input type="text" id="admin-dev-bank" placeholder="예: 카카오뱅크 3333-xx-xxxxxxx (현진호)"
+                                   class="w-full text-xs px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label for="admin-dev-toss" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">토스 송금 링크 (선택)</label>
+                                <input type="url" id="admin-dev-toss" placeholder="https://toss.me/..."
+                                       class="w-full text-xs px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                            </div>
+                            <div>
+                                <label for="admin-dev-kakaopay" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">카카오페이 송금 링크 (선택)</label>
+                                <input type="url" id="admin-dev-kakaopay" placeholder="https://qr.kakaopay.com/..."
+                                       class="w-full text-xs px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                            </div>
+                        </div>
+                        <div>
+                            <label for="admin-dev-message" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">후원 감사 안내 문구</label>
+                            <textarea id="admin-dev-message" rows="3" placeholder="개발자 응원 안내 문구..."
+                                      class="w-full text-xs px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500"></textarea>
+                        </div>
+                        <button type="submit" class="w-full py-2.5 px-4 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-500 text-white transition-all shadow-md shadow-amber-500/20">
+                            ☕ 개발자 후원 정보 저장 및 즉시 반영
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Developer Support Modal -->
+    <div id="dev-support-modal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-modal="true" role="dialog">
+        <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-xs transition-opacity" onclick="closeDevSupportModal()"></div>
+        <div class="relative min-h-screen flex items-center justify-center p-4">
+            <div class="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-amber-400/30 p-6 sm:p-7 space-y-5">
+                <div class="flex items-start justify-between">
+                    <div class="space-y-1">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-400/40">
+                            ☕ 독립 개발자 운영 응원
+                        </span>
+                        <h3 class="text-lg font-black text-slate-900 dark:text-white pt-1">PoliRank 개발자에게 커피 한 잔</h3>
+                    </div>
+                    <button onclick="closeDevSupportModal()" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-rose-500 hover:text-white flex items-center justify-center transition-colors">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <p id="dev-support-message" class="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed bg-amber-50/70 dark:bg-amber-950/20 p-3.5 rounded-2xl border border-amber-200/70 dark:border-amber-800/40">
+                    PoliRank는 정파와 자본으로부터 독립된 1인 개발자가 운영합니다. 서버 유지비와 공공데이터 파이프라인 고도화를 위해 커피 한 잔을 응원해 주세요!
+                </p>
+
+                <div id="dev-support-bank-box" class="hidden space-y-2 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700">
+                    <div class="text-[11px] font-bold text-slate-500 dark:text-slate-400">💳 개발자 후원 계좌</div>
+                    <div class="flex items-center justify-between gap-2">
+                        <strong id="dev-support-bank-text" class="text-xs sm:text-sm font-mono font-bold text-slate-800 dark:text-slate-100 select-all"></strong>
+                        <button type="button" onclick="copyDevBankInfo()" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-amber-600 dark:hover:bg-amber-400 transition-colors flex-shrink-0">
+                            <i class="fa-solid fa-copy mr-1"></i>복사
+                        </button>
+                    </div>
+                </div>
+
+                <div id="dev-support-links-box" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <a id="dev-support-toss-btn" href="#" target="_blank" rel="noopener noreferrer" class="hidden py-2.5 px-3 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white text-center transition-all">
+                        💙 토스로 송금하기
+                    </a>
+                    <a id="dev-support-kakao-btn" href="#" target="_blank" rel="noopener noreferrer" class="hidden py-2.5 px-3 rounded-xl text-xs font-bold bg-yellow-400 hover:bg-yellow-300 text-slate-900 text-center transition-all">
+                        💛 카카오페이 송금
+                    </a>
+                </div>
+
+                <div id="dev-support-empty-box" class="hidden p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-center space-y-2.5">
+                    <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                        현재 운영자가 공식 후원 계좌 및 간편송금 링크를 준비 중입니다.<br>
+                        따뜻한 응원 메시지나 서비스 제안 한 줄도 큰 힘이 됩니다!
+                    </p>
+                    <button type="button" onclick="closeDevSupportModal(); openFeedbackModal();" class="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors">
+                        <span>✉️</span>
+                        <span>개발자에게 응원·의견 보내기</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Feedback Modal -->
+    <div id="feedback-modal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-modal="true" role="dialog">
+        <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-xs transition-opacity" onclick="closeFeedbackModal()"></div>
+        <div class="relative min-h-screen flex items-center justify-center p-4">
+            <div class="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-emerald-400/30 p-6 sm:p-7 space-y-4">
+                <div class="flex items-start justify-between">
+                    <div class="space-y-1">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-400/40">
+                            ✉️ 개발자 직접 소통함
+                        </span>
+                        <h3 class="text-lg font-black text-slate-900 dark:text-white pt-1">의견 · 오류 제보 · 제휴 문의</h3>
+                    </div>
+                    <button onclick="closeFeedbackModal()" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-rose-500 hover:text-white flex items-center justify-center transition-colors">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <form id="feedback-form" onsubmit="submitFeedbackForm(event)" class="space-y-3.5">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">카테고리 선택</label>
+                        <div class="grid grid-cols-2 gap-1.5 text-xs">
+                            <label class="cursor-pointer">
+                                <input type="radio" name="feedback_category" value="제안" checked class="hidden peer">
+                                <span class="block text-center px-2.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 peer-checked:bg-emerald-600 peer-checked:text-white peer-checked:border-emerald-600 font-semibold transition-all">💡 기능·지표 제안</span>
+                            </label>
+                            <label class="cursor-pointer">
+                                <input type="radio" name="feedback_category" value="오류제보" class="hidden peer">
+                                <span class="block text-center px-2.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 peer-checked:bg-rose-600 peer-checked:text-white peer-checked:border-rose-600 font-semibold transition-all">🐛 데이터 오류 제보</span>
+                            </label>
+                            <label class="cursor-pointer">
+                                <input type="radio" name="feedback_category" value="의원실·제휴문의" class="hidden peer">
+                                <span class="block text-center px-2.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 peer-checked:bg-sky-600 peer-checked:text-white peer-checked:border-sky-600 font-semibold transition-all">🏛️ 의원실·B2B 제휴</span>
+                            </label>
+                            <label class="cursor-pointer">
+                                <input type="radio" name="feedback_category" value="기타" class="hidden peer">
+                                <span class="block text-center px-2.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 peer-checked:bg-amber-600 peer-checked:text-white peer-checked:border-amber-600 font-semibold transition-all">💬 응원·기타</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div>
+                            <label for="feedback-author" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">닉네임 / 소속 (선택)</label>
+                            <input type="text" id="feedback-author" maxlength="40" placeholder="기본: 익명 사용자"
+                                   class="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        </div>
+                        <div>
+                            <label for="feedback-contact" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">이메일 / 연락처 (선택)</label>
+                            <input type="text" id="feedback-contact" maxlength="100" placeholder="회신 희망 시 입력"
+                                   class="w-full text-xs px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="feedback-content" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">내용 <span class="text-rose-500">*</span></label>
+                        <textarea id="feedback-content" rows="4" required maxlength="1500" placeholder="새로운 지표 아이디어, 데이터 오기 제보, 의원실 파트너십 문의를 자유롭게 남겨주세요..."
+                                  class="w-full text-xs px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"></textarea>
+                    </div>
+
+                    <button type="submit" class="w-full py-2.5 px-4 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-all shadow-md shadow-emerald-500/20 flex items-center justify-center space-x-1.5">
+                        <i class="fa-solid fa-paper-plane"></i>
+                        <span>개발자에게 의견 보내기</span>
+                    </button>
+                </form>
             </div>
         </div>
     </div>

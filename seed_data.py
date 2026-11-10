@@ -332,6 +332,8 @@ def seed(preserve_user_data: bool = False):
         cursor.execute("DROP TABLE IF EXISTS comments")
         cursor.execute("DROP TABLE IF EXISTS cheer_logs")
         cursor.execute("DROP TABLE IF EXISTS office_accounts")
+        cursor.execute("DROP TABLE IF EXISTS feedbacks")
+        cursor.execute("DROP TABLE IF EXISTS site_settings")
         conn.commit()
         conn.close()
 

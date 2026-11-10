@@ -16,7 +16,7 @@ from seed_data import seed
 from scoring import calculate_member_scores, calculate_fun_metrics
 from avatar_generator import generate_caricature_svg
 from starlette.testclient import TestClient
-from app import app, COMMENT_RATE_LIMITS
+from app import app, COMMENT_RATE_LIMITS, FEEDBACK_RATE_LIMITS
 
 
 class TestPoliRankV3(unittest.TestCase):
@@ -27,6 +27,7 @@ class TestPoliRankV3(unittest.TestCase):
         cls._test_db_path = os.path.join(cls._tmp_dir.name, "test_polirank.db")
         db_module.DB_PATH = cls._test_db_path
         COMMENT_RATE_LIMITS.clear()
+        FEEDBACK_RATE_LIMITS.clear()
         seed(preserve_user_data=False)
         cls.client = TestClient(app)
 
@@ -156,6 +157,10 @@ class TestPoliRankV3(unittest.TestCase):
         self.assertIn("office-login-modal", res_root.text)
         self.assertIn("admin-issue-modal", res_root.text)
         self.assertIn("modal-office-notice-section", res_root.text)
+        self.assertIn("dev-support-modal", res_root.text)
+        self.assertIn("feedback-modal", res_root.text)
+        self.assertIn("admin-tab-feedbacks", res_root.text)
+        self.assertIn("admin-tab-devsupport", res_root.text)
         self.assertNotIn("polirank_admin_2026", res_root.text)
 
         res_meth_page = self.client.get("/methodology")
@@ -170,6 +175,9 @@ class TestPoliRankV3(unittest.TestCase):
         self.assertIn("submitOfficeLogin", res_js.text)
         self.assertIn("submitAdminIssueAccount", res_js.text)
         self.assertIn("submitOfficialReply", res_js.text)
+        self.assertIn("openDevSupportModal", res_js.text)
+        self.assertIn("submitFeedbackForm", res_js.text)
+        self.assertIn("submitAdminDevSupport", res_js.text)
         self.assertNotIn("polirank_admin_2026", res_js.text)
         self.assertIn("loadMyCheers", res_js.text)
         self.assertIn("already_cheered", res_js.text)
@@ -566,14 +574,125 @@ class TestPoliRankV3(unittest.TestCase):
         self.assertEqual(res_profane.status_code, 400)
         print("[PASS] Citizen Anonymous Comment, 15s Rate-Limit (429) & Profanity Filter (400) verified.")
 
-    def test_10_preserve_real_user_data_on_weekly_seed(self):
-        """주간 자동 업데이트(seed preserve_user_data=True) 시 실제 유저 응원/댓글/의원실 인증·공지 100% 보존 검증"""
+    def test_10_unique_299_quotes_zero_duplicates(self):
+        """v3.4 299명 전원 100% 고유 한마디(중복 제로) 및 문법 무결성 검증"""
+        res = self.client.get("/api/members")
+        self.assertEqual(res.status_code, 200)
+        members = res.json()["members"]
+        self.assertEqual(len(members), 299)
+        quotes = [m.get("quote", "").strip() for m in members]
+        self.assertTrue(all(len(q) >= 10 for q in quotes))
+        self.assertEqual(len(set(quotes)), len(members), f"Duplicate quotes found: {len(quotes)} vs {len(set(quotes))}")
+        self.assertFalse(any("에법" in q for q in quotes))
+        print(f"[PASS] 299/299 Unique Quotes verified (100% unique, 0 duplicates).")
+
+    def test_11_dev_support_and_user_feedback_workflow(self):
+        """v3.4 개발자 후원 설정/조회, 유저 의견 보내기(400/429 포함) 및 관리자 전용 열람(401/403 차단) 검증"""
+        # 1) 초기 dev-support 조회 (미설정 상태)
+        res_dev0 = self.client.get("/api/dev-support")
+        self.assertEqual(res_dev0.status_code, 200)
+        self.assertFalse(res_dev0.json()["is_configured"])
+        self.assertTrue(len(res_dev0.json()["dev_message"]) > 10)
+
+        # 2) 비관리자 접근 차단 (401 / 403)
+        self.assertEqual(self.client.get("/api/admin/feedbacks").status_code, 401)
+        self.assertEqual(
+            self.client.post("/api/admin/dev-support", json={"dev_bank_info": "hack"}).status_code,
+            401,
+        )
+        office_client = TestClient(app)
+        office_login = office_client.post(
+            "/api/office/login",
+            json={"username": "office_seoyg_test", "password": "office_pass_2026!"},
+        )
+        self.assertEqual(office_login.status_code, 200)
+        self.assertEqual(office_client.get("/api/admin/feedbacks").status_code, 403)
+        self.assertEqual(
+            office_client.post("/api/admin/dev-support", json={"dev_bank_info": "hack"}).status_code,
+            403,
+        )
+        office_client.close()
+
+        # 3) 일반 유저 의견 접수 + 빈 내용(400) + 15초 도배 방지(429)
+        fb_headers = {"User-Agent": "FeedbackClient/1.0", "X-Forwarded-For": "198.51.100.91"}
+        res_empty = self.client.post(
+            "/api/feedback",
+            headers=fb_headers,
+            json={"category": "제안", "content": "   "},
+        )
+        self.assertEqual(res_empty.status_code, 400)
+
+        res_fb = self.client.post(
+            "/api/feedback",
+            headers=fb_headers,
+            json={
+                "category": "의원실·제휴문의",
+                "author": "보좌관 K",
+                "contact": "office@assembly.example",
+                "content": "서영교 의원실 공식 계정 연동 시연 요청드립니다.",
+            },
+        )
+        self.assertEqual(res_fb.status_code, 200)
+        fb_id = res_fb.json()["feedback"]["id"]
+
+        res_fb_spam = self.client.post(
+            "/api/feedback",
+            headers=fb_headers,
+            json={"category": "기타", "content": "연속 도배 테스트"},
+        )
+        self.assertEqual(res_fb_spam.status_code, 429)
+
+        # 4) 관리자 로그인 -> 의견 열람 & 확인완료 처리 + 개발자 후원 정보 실시간 업데이트
+        admin_client = TestClient(app)
+        admin_pw = os.environ.get("POLIRANK_ADMIN_PASSWORD") or "polirank_admin_2026!"
+        self.assertEqual(
+            admin_client.post("/api/office/login", json={"username": "admin", "password": admin_pw}).status_code,
+            200,
+        )
+
+        res_list = admin_client.get("/api/admin/feedbacks")
+        self.assertEqual(res_list.status_code, 200)
+        self.assertGreaterEqual(res_list.json()["count"], 1)
+        self.assertEqual(res_list.json()["feedbacks"][0]["id"], fb_id)
+
+        res_chk = admin_client.post(f"/api/admin/feedbacks/{fb_id}/check")
+        self.assertEqual(res_chk.status_code, 200)
+        self.assertEqual(res_chk.json()["status"], "checked")
+
+        # XSS javascript: URI 차단 확인
+        res_bad_url = admin_client.post(
+            "/api/admin/dev-support",
+            json={"dev_bank_info": "카카오뱅크 3333", "dev_toss_link": "javascript:alert(1)"},
+        )
+        self.assertEqual(res_bad_url.status_code, 400)
+
+        res_save_dev = admin_client.post(
+            "/api/admin/dev-support",
+            json={
+                "dev_bank_info": "카카오뱅크 3333-01-9999999 (현진호)",
+                "dev_toss_link": "https://toss.me/jinhopolirank",
+                "dev_kakaopay_link": "https://qr.kakaopay.com/polirankdev",
+                "dev_message": "응원 감사합니다! 더 정확한 입법 데이터로 보답하겠습니다.",
+            },
+        )
+        self.assertEqual(res_save_dev.status_code, 200)
+        self.assertTrue(res_save_dev.json()["is_configured"])
+
+        res_dev1 = self.client.get("/api/dev-support").json()
+        self.assertEqual(res_dev1["dev_bank_info"], "카카오뱅크 3333-01-9999999 (현진호)")
+        self.assertEqual(res_dev1["dev_toss_link"], "https://toss.me/jinhopolirank")
+        admin_client.close()
+        print("[PASS] v3.4 Dev Support live config, XSS guard & Admin Feedback Inbox (401/403/429) verified.")
+
+    def test_12_preserve_real_user_data_on_weekly_seed(self):
+        """주간 자동 업데이트(seed preserve_user_data=True) 시 실제 유저 응원/댓글/의원실/후원/의견 100% 보존 검증"""
         conn = get_connection()
         before_cheers = conn.execute("SELECT COALESCE(SUM(cheer_count), 0) FROM members").fetchone()[0]
         before_comments = conn.execute("SELECT COUNT(*) FROM comments").fetchone()[0]
         before_logs = conn.execute("SELECT COUNT(*) FROM cheer_logs").fetchone()[0]
         before_verified = conn.execute("SELECT COUNT(*) FROM members WHERE is_verified_office = 1").fetchone()[0]
         before_accounts = conn.execute("SELECT COUNT(*) FROM office_accounts").fetchone()[0]
+        before_feedbacks = conn.execute("SELECT COUNT(*) FROM feedbacks").fetchone()[0]
         conn.close()
 
         self.assertGreater(before_cheers, 0)
@@ -581,6 +700,7 @@ class TestPoliRankV3(unittest.TestCase):
         self.assertGreater(before_logs, 0)
         self.assertGreater(before_verified, 0)
         self.assertGreaterEqual(before_accounts, 2)
+        self.assertGreaterEqual(before_feedbacks, 1)
 
         seed(preserve_user_data=True)
 
@@ -590,6 +710,7 @@ class TestPoliRankV3(unittest.TestCase):
         after_logs = conn.execute("SELECT COUNT(*) FROM cheer_logs").fetchone()[0]
         after_verified = conn.execute("SELECT COUNT(*) FROM members WHERE is_verified_office = 1").fetchone()[0]
         after_accounts = conn.execute("SELECT COUNT(*) FROM office_accounts").fetchone()[0]
+        after_feedbacks = conn.execute("SELECT COUNT(*) FROM feedbacks").fetchone()[0]
         conn.close()
 
         self.assertEqual(after_cheers, before_cheers)
@@ -597,7 +718,10 @@ class TestPoliRankV3(unittest.TestCase):
         self.assertEqual(after_logs, before_logs)
         self.assertEqual(after_verified, before_verified)
         self.assertEqual(after_accounts, before_accounts)
-        print(f"[PASS] Weekly seed(preserve_user_data=True) lossless preservation verified: cheers={after_cheers}, comments={after_comments}, logs={after_logs}, verified={after_verified}, accounts={after_accounts}")
+        self.assertEqual(after_feedbacks, before_feedbacks)
+        dev_after = self.client.get("/api/dev-support").json()
+        self.assertEqual(dev_after["dev_bank_info"], "카카오뱅크 3333-01-9999999 (현진호)")
+        print(f"[PASS] Weekly seed(preserve_user_data=True) lossless preservation verified: cheers={after_cheers}, comments={after_comments}, logs={after_logs}, verified={after_verified}, accounts={after_accounts}, feedbacks={after_feedbacks}")
 
 
 if __name__ == "__main__":

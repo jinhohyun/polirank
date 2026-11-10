@@ -245,6 +245,14 @@ function setupEventListeners() {
             if (adminModal && !adminModal.classList.contains('hidden')) {
                 closeAdminIssueModal();
             }
+            const devSupportModal = document.getElementById('dev-support-modal');
+            if (devSupportModal && !devSupportModal.classList.contains('hidden')) {
+                closeDevSupportModal();
+            }
+            const feedbackModal = document.getElementById('feedback-modal');
+            if (feedbackModal && !feedbackModal.classList.contains('hidden')) {
+                closeFeedbackModal();
+            }
         }
     });
 }
@@ -1639,16 +1647,38 @@ async function submitOfficialReply(e, parentId) {
     }
 }
 
-// Admin B2B Issuance Console Helpers
-async function openAdminIssueModal() {
+// Admin B2B Issuance, Feedbacks & Dev Support Console Helpers
+async function openAdminIssueModal(initialTab = 'accounts') {
     const modal = document.getElementById('admin-issue-modal');
     if (!modal) return;
     modal.classList.remove('hidden');
+    switchAdminTab(initialTab);
     if (allMembers.length === 0) {
         await loadMembers();
     }
     populateAdminMemberSelect();
     loadAdminOfficeAccounts();
+    loadAdminFeedbacks();
+    loadAdminDevSupportForm();
+}
+
+function switchAdminTab(tabKey) {
+    const tabs = ['accounts', 'feedbacks', 'devsupport'];
+    tabs.forEach(t => {
+        const panel = document.getElementById(`admin-tab-${t}`);
+        const btn = document.getElementById(`admin-tab-btn-${t}`);
+        const isActive = t === tabKey;
+        if (panel) panel.classList.toggle('hidden', !isActive);
+        if (btn) {
+            if (isActive) {
+                btn.classList.add('bg-white', 'dark:bg-slate-900', 'text-sky-600', 'dark:text-sky-400', 'shadow-xs');
+                btn.classList.remove('text-slate-600', 'dark:text-slate-300');
+            } else {
+                btn.classList.remove('bg-white', 'dark:bg-slate-900', 'text-sky-600', 'dark:text-sky-400', 'shadow-xs');
+                btn.classList.add('text-slate-600', 'dark:text-slate-300');
+            }
+        }
+    });
 }
 
 function closeAdminIssueModal() {
@@ -1779,6 +1809,228 @@ async function loadAdminOfficeAccounts() {
         `).join('');
     } catch (err) {
         console.error('Failed to load office accounts', err);
+    }
+}
+
+// v3.4: Developer Support Modal & Feedback System + Admin Consoles
+let cachedDevBankInfo = '';
+
+async function openDevSupportModal() {
+    const modal = document.getElementById('dev-support-modal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+
+    try {
+        const res = await fetch('/api/dev-support');
+        const data = await res.json();
+        const msgEl = document.getElementById('dev-support-message');
+        const bankBox = document.getElementById('dev-support-bank-box');
+        const bankText = document.getElementById('dev-support-bank-text');
+        const linksBox = document.getElementById('dev-support-links-box');
+        const tossBtn = document.getElementById('dev-support-toss-btn');
+        const kakaoBtn = document.getElementById('dev-support-kakao-btn');
+        const emptyBox = document.getElementById('dev-support-empty-box');
+
+        if (msgEl && data.dev_message) msgEl.textContent = data.dev_message;
+
+        cachedDevBankInfo = (data.dev_bank_info || '').trim();
+        if (bankBox && bankText) {
+            if (cachedDevBankInfo) {
+                bankText.textContent = cachedDevBankInfo;
+                bankBox.classList.remove('hidden');
+            } else {
+                bankBox.classList.add('hidden');
+            }
+        }
+
+        const safeUrl = (u) => {
+            const s = (u || '').trim();
+            return (s.startsWith('https://') || s.startsWith('http://')) ? s : '';
+        };
+        const tossUrl = safeUrl(data.dev_toss_link);
+        const kakaoUrl = safeUrl(data.dev_kakaopay_link);
+
+        if (tossBtn) {
+            if (tossUrl) {
+                tossBtn.href = tossUrl;
+                tossBtn.classList.remove('hidden');
+            } else {
+                tossBtn.classList.add('hidden');
+            }
+        }
+        if (kakaoBtn) {
+            if (kakaoUrl) {
+                kakaoBtn.href = kakaoUrl;
+                kakaoBtn.classList.remove('hidden');
+            } else {
+                kakaoBtn.classList.add('hidden');
+            }
+        }
+        if (linksBox) {
+            linksBox.classList.toggle('hidden', !tossUrl && !kakaoUrl);
+        }
+        if (emptyBox) {
+            emptyBox.classList.toggle('hidden', Boolean(cachedDevBankInfo || tossUrl || kakaoUrl));
+        }
+    } catch (err) {
+        console.error('Failed to load dev support info', err);
+    }
+}
+
+function closeDevSupportModal() {
+    document.getElementById('dev-support-modal')?.classList.add('hidden');
+}
+
+function copyDevBankInfo() {
+    if (!cachedDevBankInfo) return;
+    navigator.clipboard.writeText(cachedDevBankInfo).then(() => {
+        showToast(`☕ 후원 계좌가 복사되었습니다!\n${cachedDevBankInfo}`, 'success');
+    }).catch(() => {
+        showToast('클립보드 복사에 실패했습니다.', 'error');
+    });
+}
+
+function openFeedbackModal() {
+    const modal = document.getElementById('feedback-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        document.getElementById('feedback-content')?.focus();
+    }
+}
+
+function closeFeedbackModal() {
+    document.getElementById('feedback-modal')?.classList.add('hidden');
+}
+
+async function submitFeedbackForm(e) {
+    e.preventDefault();
+    const catRadio = document.querySelector('input[name="feedback_category"]:checked');
+    const category = catRadio ? catRadio.value : '제안';
+    const author = document.getElementById('feedback-author')?.value.trim() || '익명 사용자';
+    const contact = document.getElementById('feedback-contact')?.value.trim() || '';
+    const content = document.getElementById('feedback-content')?.value.trim() || '';
+
+    if (!content) {
+        showToast('내용을 입력해주세요.', 'error');
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/feedback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ category, author, contact, content })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            showToast(data.detail || data.message || '의견 전송에 실패했습니다.', 'error');
+            return;
+        }
+        document.getElementById('feedback-form')?.reset();
+        closeFeedbackModal();
+        showToast(data.message || '소중한 의견이 전달되었습니다!', 'success');
+    } catch (err) {
+        console.error('Feedback submit failed', err);
+        showToast('네트워크 오류로 전송에 실패했습니다.', 'error');
+    }
+}
+
+async function loadAdminFeedbacks() {
+    const listEl = document.getElementById('admin-feedbacks-list');
+    const countBadge = document.getElementById('admin-feedback-count');
+    if (!listEl) return;
+    try {
+        const res = await fetch('/api/admin/feedbacks', { credentials: 'same-origin' });
+        if (!res.ok) return;
+        const data = await res.json();
+        const items = data.feedbacks || [];
+        const newCount = items.filter(f => f.status !== 'checked').length;
+        if (countBadge) countBadge.textContent = newCount > 0 ? newCount : items.length;
+
+        if (items.length === 0) {
+            listEl.innerHTML = `<p class="text-[11px] text-slate-400 text-center py-4">아직 접수된 의견이 없습니다.</p>`;
+            return;
+        }
+
+        listEl.innerHTML = items.map(f => {
+            const isChecked = f.status === 'checked';
+            return `
+                <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/80 dark:border-slate-700/80 space-y-1.5">
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="flex items-center space-x-1.5 min-w-0">
+                            <span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-400/30">${escapeHtml(f.category)}</span>
+                            <span class="font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtml(f.author)}</span>
+                            ${f.contact ? `<span class="text-[10px] text-sky-500 truncate">(${escapeHtml(f.contact)})</span>` : ''}
+                        </div>
+                        <div class="flex items-center space-x-1.5 flex-shrink-0">
+                            <span class="text-[10px] text-slate-400">${escapeHtml(f.created_at || '')}</span>
+                            ${isChecked
+                                ? `<span class="px-1.5 py-0.5 rounded text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-500">확인됨</span>`
+                                : `<button type="button" onclick="markAdminFeedbackChecked(${f.id})" class="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-600 hover:bg-sky-500 text-white">확인완료</button>`}
+                        </div>
+                    </div>
+                    <p class="text-xs text-slate-700 dark:text-slate-200 whitespace-pre-line leading-relaxed">${escapeHtml(f.content)}</p>
+                </div>
+            `;
+        }).join('');
+    } catch (err) {
+        console.error('Failed to load admin feedbacks', err);
+    }
+}
+
+async function markAdminFeedbackChecked(feedbackId) {
+    try {
+        const res = await fetch(`/api/admin/feedbacks/${feedbackId}/check`, {
+            method: 'POST',
+            credentials: 'same-origin'
+        });
+        if (res.ok) loadAdminFeedbacks();
+    } catch (err) {
+        console.error('Mark checked failed', err);
+    }
+}
+
+async function loadAdminDevSupportForm() {
+    try {
+        const res = await fetch('/api/dev-support');
+        if (!res.ok) return;
+        const data = await res.json();
+        const bankEl = document.getElementById('admin-dev-bank');
+        const tossEl = document.getElementById('admin-dev-toss');
+        const kakaoEl = document.getElementById('admin-dev-kakaopay');
+        const msgEl = document.getElementById('admin-dev-message');
+        if (bankEl) bankEl.value = data.dev_bank_info || '';
+        if (tossEl) tossEl.value = data.dev_toss_link || '';
+        if (kakaoEl) kakaoEl.value = data.dev_kakaopay_link || '';
+        if (msgEl) msgEl.value = data.dev_message || '';
+    } catch (err) {
+        console.warn('Failed to load dev support form', err);
+    }
+}
+
+async function submitAdminDevSupport(e) {
+    e.preventDefault();
+    const dev_bank_info = document.getElementById('admin-dev-bank')?.value.trim() || '';
+    const dev_toss_link = document.getElementById('admin-dev-toss')?.value.trim() || '';
+    const dev_kakaopay_link = document.getElementById('admin-dev-kakaopay')?.value.trim() || '';
+    const dev_message = document.getElementById('admin-dev-message')?.value.trim() || '';
+
+    try {
+        const res = await fetch('/api/admin/dev-support', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ dev_bank_info, dev_toss_link, dev_kakaopay_link, dev_message })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            showToast(data.detail || '후원 설정 저장에 실패했습니다.', 'error');
+            return;
+        }
+        showToast('개발자 후원 계좌/링크가 저장되어 즉시 반영되었습니다! ☕', 'success');
+    } catch (err) {
+        console.error('Save dev support failed', err);
+        showToast('저장 중 오류가 발생했습니다.', 'error');
     }
 }
 

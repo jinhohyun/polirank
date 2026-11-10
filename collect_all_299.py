@@ -920,6 +920,10 @@ def build_all_members_dataset() -> Dict[str, Any]:
             "weekly_stats": weekly_stats,
         })
 
+    # v3.4: 299명 전원 100% 고유 한마디(중복 제로) 자동 부여 및 검증
+    from generate_unique_quotes import assign_unique_quotes
+    assign_unique_quotes(enriched_members, preserved_extra=MEMBER_FUN_AND_EXTRA_DATA)
+
     return {
         "updated_at": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
         "assembly_term": 22,

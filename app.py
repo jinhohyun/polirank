@@ -35,14 +35,19 @@ from database import (
     toggle_member_verification,
     update_office_notice,
     list_office_accounts,
+    get_dev_support_settings,
+    update_dev_support_settings,
+    add_feedback,
+    list_feedbacks,
+    mark_feedback_status,
 )
 from avatar_generator import generate_caricature_svg
 from scoring import SCORING_METHODOLOGY
 
 app = FastAPI(
     title="PoliRank API",
-    description="제22대 국회의원 299인 6대 핵심 축 · 14대 실제 공공 팩트 + 공식 의원실 소통 API",
-    version="3.3.0"
+    description="제22대 국회의원 299인 6대 핵심 축 · 14대 실제 공공 팩트 + 공식 의원실 소통 & 후원/의견 API",
+    version="3.4.0"
 )
 
 VID_COOKIE_NAME = "polirank_vid"
@@ -51,6 +56,7 @@ OFFICE_COOKIE_NAME = "polirank_office_session"
 OFFICE_SESSION_TTL = 60 * 60 * 24 * 7
 COMMENT_COOLDOWN_SEC = 15.0
 COMMENT_RATE_LIMITS: dict[str, float] = {}
+FEEDBACK_RATE_LIMITS: dict[str, float] = {}
 BLOCKED_PROFANITY_WORDS = (
     "씨발", "시발", "병신", "개새끼", "미친놈", "미친년", "존나", "씹새", "애미", "죽어라"
 )
@@ -211,6 +217,42 @@ class AdminIssueAccountRequest(BaseModel):
 class AdminToggleVerifyRequest(BaseModel):
     member_id: str
     verified: Optional[bool] = None
+
+
+class DevSupportUpdateRequest(BaseModel):
+    dev_bank_info: str = ""
+    dev_toss_link: str = ""
+    dev_kakaopay_link: str = ""
+    dev_message: str = ""
+
+
+class FeedbackCreateRequest(BaseModel):
+    category: str = "제안"
+    author: Optional[str] = "익명 사용자"
+    contact: Optional[str] = ""
+    content: str
+
+
+def _require_admin(request: Request) -> dict:
+    session = _decode_office_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="운영자 로그인이 필요합니다.")
+    if session.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="운영자 권한이 필요합니다.")
+    return session
+
+
+def _check_rate_limit(bucket: dict[str, float], key: str, cooldown_sec: float = COMMENT_COOLDOWN_SEC) -> Optional[int]:
+    now = time.time()
+    last_ts = bucket.get(key)
+    if last_ts is not None and (now - last_ts) < cooldown_sec:
+        return int(cooldown_sec - (now - last_ts)) + 1
+    bucket[key] = now
+    if len(bucket) > 2000:
+        cutoff = now - 60.0
+        for k in [k for k, ts in bucket.items() if ts < cutoff]:
+            bucket.pop(k, None)
+    return None
 
 from seed_data import seed
 from database import get_connection
@@ -522,12 +564,91 @@ def admin_toggle_verify(payload: AdminToggleVerifyRequest, request: Request):
 @app.get("/api/admin/office-accounts")
 def admin_list_accounts(request: Request):
     """운영자 전용(role=admin): 발급된 의원실 계정 목록 조회"""
-    session = _decode_office_session(request)
-    if not session:
-        raise HTTPException(status_code=401, detail="운영자 로그인이 필요합니다.")
-    if session.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="운영자 권한이 필요합니다.")
+    _require_admin(request)
     return {"status": "success", "accounts": list_office_accounts()}
+
+
+@app.get("/api/dev-support")
+def read_dev_support():
+    """개발자 후원 계좌/송금링크/메시지 조회"""
+    return {"status": "success", **get_dev_support_settings()}
+
+
+@app.post("/api/admin/dev-support")
+def admin_update_dev_support(payload: DevSupportUpdateRequest, request: Request):
+    """운영자 전용(role=admin): 개발자 후원 계좌/송금링크 실시간 수정 저장"""
+    _require_admin(request)
+    for field_name, link in [("토스 송금 링크", payload.dev_toss_link), ("카카오페이 송금 링크", payload.dev_kakaopay_link)]:
+        clean_link = (link or "").strip()
+        if clean_link and not (clean_link.startswith("https://") or clean_link.startswith("http://")):
+            raise HTTPException(status_code=400, detail=f"{field_name}는 http:// 또는 https://로 시작하는 유효한 URL이어야 합니다.")
+
+    updated = update_dev_support_settings(
+        dev_bank_info=payload.dev_bank_info,
+        dev_toss_link=payload.dev_toss_link,
+        dev_kakaopay_link=payload.dev_kakaopay_link,
+        dev_message=payload.dev_message,
+    )
+    return {"status": "success", **updated}
+
+
+@app.post("/api/feedback")
+def submit_user_feedback(payload: FeedbackCreateRequest, request: Request):
+    """유저 의견 제안 / 데이터 오류 제보 / 의원실 제휴 문의 접수 (15초 도배 방지)"""
+    clean_content = (payload.content or "").strip()
+    if not clean_content:
+        raise HTTPException(status_code=400, detail="의견 내용을 입력해주세요.")
+    if len(clean_content) > 1500:
+        raise HTTPException(status_code=400, detail="의견 내용은 1500자 이내로 작성해주세요.")
+
+    allowed_categories = {"제안", "오류제보", "의원실·제휴문의", "기타"}
+    category = (payload.category or "제안").strip()
+    if category not in allowed_categories:
+        category = "기타"
+
+    ip_ua_hash = _compute_ip_ua_hash(request)
+    retry_after = _check_rate_limit(FEEDBACK_RATE_LIMITS, ip_ua_hash, COMMENT_COOLDOWN_SEC)
+    if retry_after is not None:
+        return JSONResponse(
+            status_code=429,
+            content={
+                "status": "rate_limited",
+                "detail": f"도배 방지를 위해 {retry_after}초 후 다시 전송해주세요.",
+                "message": f"도배 방지를 위해 {retry_after}초 후 다시 전송해주세요.",
+                "retry_after": retry_after,
+            },
+        )
+
+    saved = add_feedback(
+        category=category,
+        author=(payload.author or "").strip() or "익명 사용자",
+        contact=(payload.contact or "").strip()[:120],
+        content=clean_content,
+        ip_ua_hash=ip_ua_hash,
+    )
+    return {
+        "status": "success",
+        "message": "소중한 의견이 개발자에게 전달되었습니다! 감사합니다.",
+        "feedback": saved,
+    }
+
+
+@app.get("/api/admin/feedbacks")
+def admin_read_feedbacks(request: Request, limit: int = 100):
+    """운영자 전용(role=admin): 접수된 유저 의견 및 제휴 문의 목록 조회"""
+    _require_admin(request)
+    rows = list_feedbacks(limit=limit)
+    return {"status": "success", "count": len(rows), "feedbacks": rows}
+
+
+@app.post("/api/admin/feedbacks/{feedback_id}/check")
+def admin_check_feedback(feedback_id: int, request: Request):
+    """운영자 전용(role=admin): 유저 의견 확인 완료 처리"""
+    _require_admin(request)
+    res = mark_feedback_status(feedback_id, status="checked")
+    if not res:
+        raise HTTPException(status_code=404, detail="Feedback not found")
+    return {"status": "success", **res}
 
 
 @app.get("/api/members/{member_id}/comments")

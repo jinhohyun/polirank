@@ -190,6 +190,41 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_cheer_logs_member_cookie ON cheer_logs (member_id, cookie_hash);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_cheer_logs_member_ipua ON cheer_logs (member_id, ip_ua_hash);")
 
+    # v3.4: 유저 의견 / 버그 제보 / 의원실 제휴 문의 테이블
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS feedbacks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        category TEXT NOT NULL DEFAULT '제안',
+        author TEXT DEFAULT '익명 사용자',
+        contact TEXT DEFAULT '',
+        content TEXT NOT NULL,
+        ip_ua_hash TEXT DEFAULT '',
+        status TEXT DEFAULT 'new',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_feedbacks_created ON feedbacks (id DESC);")
+
+    # v3.4: 사이트 설정 테이블 (개발자 후원 계좌/송금링크/메시지 실시간 관리)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS site_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT DEFAULT '',
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+    default_settings = {
+        "dev_bank_info": os.environ.get("DEV_SUPPORT_BANK", ""),
+        "dev_toss_link": os.environ.get("DEV_TOSS_LINK", ""),
+        "dev_kakaopay_link": os.environ.get("DEV_KAKAOPAY_LINK", ""),
+        "dev_message": "PoliRank는 정파와 자본으로부터 독립된 1인 개발자가 운영합니다. 서버 유지비와 공공데이터 파이프라인 고도화를 위해 커피 한 잔을 응원해 주세요!",
+    }
+    for s_key, s_val in default_settings.items():
+        cursor.execute(
+            "INSERT OR IGNORE INTO site_settings (key, value) VALUES (?, ?)",
+            (s_key, s_val),
+        )
+
     # 초기 운영자 계정 자동 부트스트랩 (없는 경우 생성, 환경변수 지정 시 해시 동기화)
     env_admin_pw = os.environ.get("POLIRANK_ADMIN_PASSWORD")
     cursor.execute("SELECT id, password_hash FROM office_accounts WHERE role = 'admin' LIMIT 1")
@@ -815,6 +850,130 @@ def list_office_accounts() -> List[Dict[str, Any]]:
             ORDER BY oa.id DESC
         """)
         return [dict(r) for r in cursor.fetchall()]
+    finally:
+        conn.close()
+
+
+DEFAULT_DEV_MESSAGE = (
+    "PoliRank는 정파와 자본으로부터 독립된 1인 개발자가 운영합니다. "
+    "서버 유지비와 공공데이터 파이프라인 고도화를 위해 커피 한 잔을 응원해 주세요!"
+)
+
+
+def get_dev_support_settings() -> Dict[str, Any]:
+    """개발자 후원 계좌/송금링크/안내 문구 조회"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT key, value FROM site_settings WHERE key IN ('dev_bank_info', 'dev_toss_link', 'dev_kakaopay_link', 'dev_message')"
+        )
+        rows = {r["key"]: (r["value"] or "") for r in cursor.fetchall()}
+        bank_info = rows.get("dev_bank_info") or os.environ.get("DEV_SUPPORT_BANK", "")
+        toss_link = rows.get("dev_toss_link") or os.environ.get("DEV_TOSS_LINK", "")
+        kakaopay_link = rows.get("dev_kakaopay_link") or os.environ.get("DEV_KAKAOPAY_LINK", "")
+        dev_msg = rows.get("dev_message") or DEFAULT_DEV_MESSAGE
+        return {
+            "dev_bank_info": bank_info,
+            "dev_toss_link": toss_link,
+            "dev_kakaopay_link": kakaopay_link,
+            "dev_message": dev_msg,
+            "is_configured": bool(bank_info.strip() or toss_link.strip() or kakaopay_link.strip()),
+        }
+    finally:
+        conn.close()
+
+
+def update_dev_support_settings(
+    dev_bank_info: str = "",
+    dev_toss_link: str = "",
+    dev_kakaopay_link: str = "",
+    dev_message: str = "",
+) -> Dict[str, Any]:
+    """운영자 전용: 개발자 후원 정보 실시간 저장"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        clean_values = {
+            "dev_bank_info": (dev_bank_info or "").strip(),
+            "dev_toss_link": (dev_toss_link or "").strip(),
+            "dev_kakaopay_link": (dev_kakaopay_link or "").strip(),
+            "dev_message": (dev_message or "").strip() or DEFAULT_DEV_MESSAGE,
+        }
+        for k, v in clean_values.items():
+            cursor.execute("""
+                INSERT INTO site_settings (key, value, updated_at)
+                VALUES (?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
+            """, (k, v))
+        conn.commit()
+        return get_dev_support_settings()
+    finally:
+        conn.close()
+
+
+def add_feedback(
+    category: str,
+    author: str,
+    contact: str,
+    content: str,
+    ip_ua_hash: str = "",
+) -> Dict[str, Any]:
+    """유저 의견 / 버그 제보 / 의원실 제휴 문의 저장"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        clean_cat = (category or "").strip() or "제안"
+        clean_author = (author or "").strip() or "익명 사용자"
+        clean_contact = (contact or "").strip()
+        clean_content = content.strip()
+        cursor.execute("""
+            INSERT INTO feedbacks (category, author, contact, content, ip_ua_hash, status, created_at)
+            VALUES (?, ?, ?, ?, ?, 'new', ?)
+        """, (clean_cat, clean_author, clean_contact, clean_content, ip_ua_hash, created_at))
+        new_id = cursor.lastrowid
+        conn.commit()
+        return {
+            "id": new_id,
+            "category": clean_cat,
+            "author": clean_author,
+            "contact": clean_contact,
+            "content": clean_content,
+            "status": "new",
+            "created_at": created_at,
+        }
+    finally:
+        conn.close()
+
+
+def list_feedbacks(limit: int = 100) -> List[Dict[str, Any]]:
+    """운영자 전용: 접수된 유저 의견 / B2B 문의 목록 조회"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT id, category, author, contact, content, status, created_at
+            FROM feedbacks
+            ORDER BY id DESC
+            LIMIT ?
+        """, (limit,))
+        return [dict(r) for r in cursor.fetchall()]
+    finally:
+        conn.close()
+
+
+def mark_feedback_status(feedback_id: int, status: str = "checked") -> Optional[Dict[str, Any]]:
+    """운영자 전용: 접수된 의견 확인 상태 변경"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT id FROM feedbacks WHERE id = ?", (feedback_id,))
+        if not cursor.fetchone():
+            return None
+        cursor.execute("UPDATE feedbacks SET status = ? WHERE id = ?", (status, feedback_id))
+        conn.commit()
+        return {"id": feedback_id, "status": status}
     finally:
         conn.close()
 
