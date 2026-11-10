@@ -1,9 +1,13 @@
 """
 PoliRank - 국회의원 객관적 랭킹 & 커뮤니티 MVP 플랫폼 백엔드 (FastAPI) - 6대 정량 지표 & 재미요소 확장
 """
+import base64
 import hashlib
+import hmac
+import json
 import os
 import sys
+import time
 import uuid
 from typing import Optional
 from fastapi import FastAPI, HTTPException, Query, Request, Response
@@ -24,19 +28,32 @@ from database import (
     get_cheered_member_ids,
     get_comments,
     add_comment,
-    get_summary_stats
+    get_summary_stats,
+    authenticate_office_account,
+    get_office_account_by_username,
+    issue_office_account,
+    toggle_member_verification,
+    update_office_notice,
+    list_office_accounts,
 )
 from avatar_generator import generate_caricature_svg
 from scoring import SCORING_METHODOLOGY
 
 app = FastAPI(
     title="PoliRank API",
-    description="제22대 국회의원 299인 6대 핵심 축 · 14대 실제 공공 팩트 + 재미·화제성 랭킹 API",
-    version="3.2.0"
+    description="제22대 국회의원 299인 6대 핵심 축 · 14대 실제 공공 팩트 + 공식 의원실 소통 API",
+    version="3.3.0"
 )
 
 VID_COOKIE_NAME = "polirank_vid"
 VID_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
+OFFICE_COOKIE_NAME = "polirank_office_session"
+OFFICE_SESSION_TTL = 60 * 60 * 24 * 7
+COMMENT_COOLDOWN_SEC = 15.0
+COMMENT_RATE_LIMITS: dict[str, float] = {}
+BLOCKED_PROFANITY_WORDS = (
+    "씨발", "시발", "병신", "개새끼", "미친놈", "미친년", "존나", "씹새", "애미", "죽어라"
+)
 
 
 def _sha256(value: str) -> str:
@@ -86,6 +103,69 @@ def _set_vid_cookie(resp: Response, vid: str, request: Request) -> None:
         path="/",
     )
 
+
+def _get_signing_secret() -> str:
+    env_secret = os.environ.get("POLIRANK_SECRET_KEY")
+    if env_secret:
+        return env_secret
+    seed_pw = os.environ.get("POLIRANK_ADMIN_PASSWORD") or "polirank_admin_2026!"
+    return hashlib.sha256(f"{seed_pw}|polirank-v33-session-secret".encode("utf-8")).hexdigest()
+
+
+def _create_office_session_token(account: dict) -> str:
+    payload = {
+        "u": account["username"],
+        "r": account["role"],
+        "m": account.get("member_id"),
+        "o": account.get("office_name"),
+        "exp": int(time.time()) + OFFICE_SESSION_TTL,
+    }
+    raw_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    payload_b64 = base64.urlsafe_b64encode(raw_json).decode("ascii")
+    sig = hmac.new(_get_signing_secret().encode("utf-8"), payload_b64.encode("ascii"), hashlib.sha256).hexdigest()
+    return f"{payload_b64}.{sig}"
+
+
+def _decode_office_session(request: Request) -> Optional[dict]:
+    token = (request.cookies.get(OFFICE_COOKIE_NAME) or "").strip()
+    if not token or "." not in token:
+        return None
+    try:
+        payload_b64, sig = token.rsplit(".", 1)
+        expected_sig = hmac.new(
+            _get_signing_secret().encode("utf-8"),
+            payload_b64.encode("ascii"),
+            hashlib.sha256,
+        ).hexdigest()
+        if not hmac.compare_digest(expected_sig, sig):
+            return None
+        payload = json.loads(base64.urlsafe_b64decode(payload_b64.encode("ascii")).decode("utf-8"))
+        if int(payload.get("exp", 0)) < int(time.time()):
+            return None
+        account = get_office_account_by_username(payload.get("u", ""))
+        if not account:
+            return None
+        return account
+    except Exception:
+        return None
+
+
+def _set_office_cookie(resp: Response, token: str, request: Request) -> None:
+    is_https = (
+        request.headers.get("x-forwarded-proto", "").lower() == "https"
+        or request.url.scheme == "https"
+    )
+    resp.set_cookie(
+        key=OFFICE_COOKIE_NAME,
+        value=token,
+        max_age=OFFICE_SESSION_TTL,
+        httponly=True,
+        samesite="lax",
+        secure=is_https,
+        path="/",
+    )
+
+
 # CORS 설정
 app.add_middleware(
     CORSMiddleware,
@@ -106,6 +186,31 @@ class CommentCreate(BaseModel):
     author: Optional[str] = "익명 유권자"
     stance: Optional[str] = "cheer"  # cheer, critique, proposal
     content: str
+    parent_id: Optional[int] = None
+    is_official_reply: Optional[bool] = False
+
+
+class OfficeLoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class OfficeNoticeRequest(BaseModel):
+    notice: str
+    member_id: Optional[str] = None
+
+
+class AdminIssueAccountRequest(BaseModel):
+    member_id: str
+    username: str
+    password: str
+    verify_now: bool = True
+    office_name: Optional[str] = None
+
+
+class AdminToggleVerifyRequest(BaseModel):
+    member_id: str
+    verified: Optional[bool] = None
 
 from seed_data import seed
 from database import get_connection
@@ -303,33 +408,221 @@ def cheer(member_id: str, request: Request):
         _set_vid_cookie(resp, vid, request)
     return resp
 
+@app.post("/api/office/login")
+def office_login(payload: OfficeLoginRequest, request: Request):
+    """공식 의원실 및 운영자 로그인 (HttpOnly HMAC 서명 세션 발급)"""
+    account = authenticate_office_account(payload.username, payload.password)
+    if not account:
+        raise HTTPException(status_code=401, detail="아이디 또는 비밀번호가 올바르지 않습니다.")
+    token = _create_office_session_token(account)
+    resp = JSONResponse(
+        status_code=200,
+        content={
+            "status": "success",
+            "authenticated": True,
+            "username": account["username"],
+            "role": account["role"],
+            "member_id": account.get("member_id"),
+            "office_name": account["office_name"],
+        },
+    )
+    _set_office_cookie(resp, token, request)
+    return resp
+
+
+@app.post("/api/office/logout")
+def office_logout():
+    """의원실 / 운영자 로그아웃 (세션 쿠키 삭제)"""
+    resp = JSONResponse(status_code=200, content={"status": "success", "authenticated": False})
+    resp.delete_cookie(key=OFFICE_COOKIE_NAME, path="/")
+    return resp
+
+
+@app.get("/api/office/me")
+def office_me(request: Request):
+    """현재 로그인된 의원실 / 운영자 세션 상태 조회"""
+    session = _decode_office_session(request)
+    if not session:
+        return {
+            "authenticated": False,
+            "username": None,
+            "role": None,
+            "member_id": None,
+            "office_name": None,
+        }
+    return {
+        "authenticated": True,
+        "username": session["username"],
+        "role": session["role"],
+        "member_id": session.get("member_id"),
+        "office_name": session["office_name"],
+    }
+
+
+@app.post("/api/office/notice")
+def save_office_notice(payload: OfficeNoticeRequest, request: Request):
+    """로그인한 의원실 계정의 본인 의원 공식 의정 브리핑/소명 공지 저장"""
+    session = _decode_office_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="의원실 공식 계정 로그인이 필요합니다.")
+    if session.get("role") != "office" or not session.get("member_id"):
+        raise HTTPException(status_code=403, detail="의원실 계정으로만 의정 브리핑을 등록할 수 있습니다.")
+    if payload.member_id and payload.member_id != session["member_id"]:
+        raise HTTPException(status_code=403, detail="본인 의원실 페이지의 의정 브리핑만 수정할 수 있습니다.")
+
+    notice_text = (payload.notice or "").strip()
+    if len(notice_text) > 1000:
+        raise HTTPException(status_code=400, detail="의정 브리핑은 1000자 이내로 작성해주세요.")
+
+    updated = update_office_notice(session["member_id"], notice_text)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Member not found")
+    return {"status": "success", **updated}
+
+
+@app.post("/api/admin/issue-office-account")
+def admin_issue_account(payload: AdminIssueAccountRequest, request: Request):
+    """운영자 전용(role=admin): 299명 중 원하는 의원실 계정 발급/초기화 및 즉시 공식인증"""
+    session = _decode_office_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="운영자 로그인이 필요합니다.")
+    if session.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="운영자 권한이 필요합니다.")
+
+    try:
+        account = issue_office_account(
+            member_id=payload.member_id,
+            username=payload.username,
+            password=payload.password,
+            verify_now=payload.verify_now,
+            office_name=payload.office_name,
+        )
+        return {"status": "success", "account": account}
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/admin/toggle-verify")
+def admin_toggle_verify(payload: AdminToggleVerifyRequest, request: Request):
+    """운영자 전용(role=admin): 특정 의원 공식 인증 배지(0/1) 토글"""
+    session = _decode_office_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="운영자 로그인이 필요합니다.")
+    if session.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="운영자 권한이 필요합니다.")
+
+    res = toggle_member_verification(payload.member_id, verified=payload.verified)
+    if not res:
+        raise HTTPException(status_code=404, detail="Member not found")
+    return {"status": "success", **res}
+
+
+@app.get("/api/admin/office-accounts")
+def admin_list_accounts(request: Request):
+    """운영자 전용(role=admin): 발급된 의원실 계정 목록 조회"""
+    session = _decode_office_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="운영자 로그인이 필요합니다.")
+    if session.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="운영자 권한이 필요합니다.")
+    return {"status": "success", "accounts": list_office_accounts()}
+
+
 @app.get("/api/members/{member_id}/comments")
 def read_comments(member_id: str, limit: int = 50):
-    """의원 상세 토론 댓글 피드 조회"""
+    """의원 상세 토론 댓글 및 공식 대댓글 계층 피드 조회"""
     comments = get_comments(member_id, limit=limit)
+    total_count = sum(1 + len(c.get("replies", [])) for c in comments)
     return {
         "status": "success",
         "member_id": member_id,
-        "count": len(comments),
+        "count": total_count,
+        "top_level_count": len(comments),
         "comments": comments
     }
 
+
 @app.post("/api/members/{member_id}/comments")
-def create_comment(member_id: str, payload: CommentCreate):
-    """의원 토론 댓글 작성"""
+def create_comment(member_id: str, payload: CommentCreate, request: Request):
+    """의원 토론 시민 댓글(무기명 허용 + 도배 방지) 또는 공식 의원실 대댓글 작성"""
     member = get_member_by_id(member_id)
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
-        
-    if not payload.content or not payload.content.strip():
-        raise HTTPException(status_code=400, detail="Comment content cannot be empty")
-        
-    new_comment = add_comment(
-        member_id=member_id,
-        author=payload.author or "익명 시민",
-        content=payload.content,
-        stance=payload.stance or "cheer"
-    )
+
+    clean_content = (payload.content or "").strip()
+    if not clean_content:
+        raise HTTPException(status_code=400, detail="댓글 내용을 입력해주세요.")
+    if len(clean_content) > 600:
+        raise HTTPException(status_code=400, detail="댓글은 600자 이내로 작성해주세요.")
+
+    if payload.is_official_reply:
+        session = _decode_office_session(request)
+        if not session:
+            raise HTTPException(status_code=401, detail="공식 답변을 작성하려면 의원실 계정 로그인이 필요합니다.")
+        if session.get("role") != "office" or session.get("member_id") != member_id:
+            raise HTTPException(status_code=403, detail="본인 의원실 페이지의 댓글에만 공식 대댓글을 작성할 수 있습니다.")
+        if payload.parent_id is None:
+            raise HTTPException(status_code=400, detail="공식 대댓글 대상 부모 댓글(parent_id)이 필요합니다.")
+
+        badge_name = f"{member['name']} 의원실 공식"
+        try:
+            new_comment = add_comment(
+                member_id=member_id,
+                author=f"{member['name']} 의원실",
+                content=clean_content,
+                stance="official",
+                parent_id=payload.parent_id,
+                is_official_reply=True,
+                official_badge_name=badge_name,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+        return {
+            "status": "success",
+            "comment": new_comment,
+            "is_verified_office": 1,
+        }
+
+    # 일반 시민 무기명 댓글: 기본 유해어 필터 + 동일 IP/UA 15초 연속 도배 방지(429)
+    lowered = clean_content.lower()
+    if any(bad in lowered for bad in BLOCKED_PROFANITY_WORDS):
+        raise HTTPException(status_code=400, detail="건전한 토론 문화 조성을 위해 심한 비속어/유해 표현은 제한됩니다.")
+
+    ip_ua_hash = _compute_ip_ua_hash(request)
+    now = time.time()
+    last_post = COMMENT_RATE_LIMITS.get(ip_ua_hash)
+    if last_post is not None and (now - last_post) < COMMENT_COOLDOWN_SEC:
+        retry_after = int(COMMENT_COOLDOWN_SEC - (now - last_post)) + 1
+        return JSONResponse(
+            status_code=429,
+            content={
+                "status": "rate_limited",
+                "detail": f"도배 방지를 위해 {retry_after}초 후 다시 작성해주세요.",
+                "message": f"도배 방지를 위해 {retry_after}초 후 다시 작성해주세요.",
+                "retry_after": retry_after,
+            },
+        )
+    COMMENT_RATE_LIMITS[ip_ua_hash] = now
+    if len(COMMENT_RATE_LIMITS) > 2000:
+        cutoff = now - 60.0
+        for k in [k for k, ts in COMMENT_RATE_LIMITS.items() if ts < cutoff]:
+            COMMENT_RATE_LIMITS.pop(k, None)
+
+    try:
+        new_comment = add_comment(
+            member_id=member_id,
+            author=(payload.author or "").strip() or "익명 유권자",
+            content=clean_content,
+            stance=payload.stance or "cheer",
+            parent_id=payload.parent_id,
+            is_official_reply=False,
+            official_badge_name="",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     return {
         "status": "success",
         "comment": new_comment

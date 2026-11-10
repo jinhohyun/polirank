@@ -298,19 +298,21 @@ def seed(preserve_user_data: bool = False):
     print(f"[*] Found {len(members)} members in seed data.")
 
     existing_cheers = {}
-    existing_comment_counts = {}
     existing_comment_stances = {}
+    existing_verified = {}
+    existing_notices = {}
 
     if preserve_user_data:
         conn_prev = get_connection()
         cur_prev = conn_prev.cursor()
         try:
-            for r in cur_prev.execute("SELECT id, cheer_count FROM members").fetchall():
+            for r in cur_prev.execute("SELECT id, cheer_count, COALESCE(is_verified_office, 0) as ver, COALESCE(office_notice, '') as notice FROM members").fetchall():
                 existing_cheers[r["id"]] = r["cheer_count"]
-            for r in cur_prev.execute("SELECT member_id, stance, COUNT(*) as cnt FROM comments GROUP BY member_id, stance").fetchall():
+                existing_verified[r["id"]] = int(r["ver"] or 0)
+                existing_notices[r["id"]] = r["notice"] or ""
+            for r in cur_prev.execute("SELECT member_id, stance, COUNT(*) as cnt FROM comments WHERE COALESCE(is_official_reply, 0) = 0 GROUP BY member_id, stance").fetchall():
                 mid = r["member_id"]
                 existing_comment_stances.setdefault(mid, {})[r["stance"]] = r["cnt"]
-                existing_comment_counts[mid] = existing_comment_counts.get(mid, 0) + r["cnt"]
         except Exception as e:
             print("[!] Warning reading existing user data:", e)
         finally:
@@ -329,6 +331,7 @@ def seed(preserve_user_data: bool = False):
         cursor.execute("DROP TABLE IF EXISTS members")
         cursor.execute("DROP TABLE IF EXISTS comments")
         cursor.execute("DROP TABLE IF EXISTS cheer_logs")
+        cursor.execute("DROP TABLE IF EXISTS office_accounts")
         conn.commit()
         conn.close()
 
@@ -403,6 +406,9 @@ def seed(preserve_user_data: bool = False):
             comment_stats=c_stances,
         )
 
+        is_verified_office = int(existing_verified.get(m["id"], 0)) if preserve_user_data else 0
+        office_notice = existing_notices.get(m["id"], "") if preserve_user_data else ""
+
         cursor.execute("""
             INSERT OR REPLACE INTO members (
                 id, mona_cd, name, hanja_name, party, party_color, district, region_type,
@@ -413,8 +419,9 @@ def seed(preserve_user_data: bool = False):
                 voting_score, speech_score, policy_score, voting_rate, speech_count,
                 total_score, fandom_score, controversy_score, hidden_gem_score,
                 news_30d_count, controversy_news_count, recent_news_json,
-                tier, tier_title, weekly_stats_json, recent_bills_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                tier, tier_title, weekly_stats_json, recent_bills_json,
+                is_verified_office, office_notice
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             m["id"],
             mona_cd,
@@ -459,6 +466,8 @@ def seed(preserve_user_data: bool = False):
             scores["tier_title"],
             json.dumps(weekly_stats, ensure_ascii=False),
             json.dumps(recent_bills, ensure_ascii=False),
+            is_verified_office,
+            office_notice,
         ))
 
     conn.commit()

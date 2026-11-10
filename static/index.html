@@ -48,7 +48,7 @@
                     <div>
                         <div class="flex items-center space-x-2">
                             <span class="text-xl sm:text-2xl font-black tracking-tight bg-gradient-to-r from-sky-500 via-indigo-500 to-rose-500 bg-clip-text text-transparent">PoliRank</span>
-                            <span class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">v3.1 · 팩트+재미</span>
+                            <span class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">v3.3 · 팩트+의원실</span>
                         </div>
                         <p class="text-xs text-slate-500 dark:text-slate-400 font-medium hidden sm:block">제22대 국회 6대 핵심 축 · 14대 공공 팩트 + 화제성 랭킹</p>
                     </div>
@@ -89,6 +89,15 @@
                         <span>선관위 공식 후원센터</span>
                         <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
                     </a>
+
+                    <!-- Official Office Auth / Admin Controls -->
+                    <div id="office-auth-controls" class="flex items-center space-x-1.5">
+                        <button onclick="openOfficeLoginModal()" class="inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-sky-50 dark:hover:bg-sky-950/50 hover:text-sky-600 dark:hover:text-sky-400 transition-all border border-slate-200 dark:border-slate-700">
+                            <span>🏛️</span>
+                            <span class="hidden sm:inline">의원실 로그인</span>
+                            <span class="sm:hidden">로그인</span>
+                        </button>
+                    </div>
 
                     <!-- Theme Toggle -->
                     <button id="theme-toggle" class="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:text-sky-500 transition-colors" title="다크/라이트 모드 전환">
@@ -306,10 +315,14 @@
                             <span id="modal-terms-badge" class="px-2 py-0.5 rounded-md text-xs bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-semibold">3선</span>
                             <span id="modal-media-mentions" class="px-2 py-0.5 rounded-md text-xs bg-rose-500/10 text-rose-500 border border-rose-500/30 font-bold">🔥 언론 언급 3,420회</span>
                         </div>
-                        <div class="flex items-baseline justify-center md:justify-start gap-2">
+                        <div class="flex flex-wrap items-baseline justify-center md:justify-start gap-2">
                             <h2 id="modal-member-name" class="text-2xl font-black text-slate-900 dark:text-white">박찬대</h2>
                             <span id="modal-hanja-name" class="text-sm text-slate-400 font-medium">朴贊大</span>
                             <span id="modal-age" class="text-xs text-slate-500">59세</span>
+                            <span id="modal-verified-badge" class="hidden inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold verified-office-pill" title="공식 의원실 직접 인증 및 소통 참여">
+                                <i class="fa-solid fa-circle-check text-sky-500"></i>
+                                <span>공식 의원실 인증</span>
+                            </span>
                         </div>
                         <p id="modal-district-comm" class="text-xs sm:text-sm text-slate-600 dark:text-slate-300">
                             <i class="fa-solid fa-location-dot text-rose-500 mr-1"></i><span id="modal-district">인천 연수구갑</span> · 
@@ -486,6 +499,33 @@
                     </div>
                 </div>
 
+                <!-- Official Office Notice / Briefing Section -->
+                <div id="modal-office-notice-section" class="hidden p-5 rounded-2xl bg-sky-500/5 dark:bg-sky-950/30 border border-sky-400/35 space-y-3">
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="flex items-center space-x-2">
+                            <span class="text-base">📌</span>
+                            <h4 id="modal-office-notice-title" class="text-sm font-bold text-sky-700 dark:text-sky-300">의원실 공식 의정 브리핑</h4>
+                        </div>
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold verified-office-pill">
+                            <i class="fa-solid fa-circle-check mr-0.5"></i>공식 소명·공지
+                        </span>
+                    </div>
+                    <p id="modal-office-notice-text" class="text-xs sm:text-sm text-slate-700 dark:text-slate-200 leading-relaxed whitespace-pre-line"></p>
+                    <div id="office-notice-editor" class="hidden space-y-2 pt-2 border-t border-sky-400/20">
+                        <label for="office-notice-input" class="block text-[11px] font-bold text-sky-600 dark:text-sky-400">
+                            🏛️ 의원실 공식 브리핑 작성 / 수정
+                        </label>
+                        <textarea id="office-notice-input" rows="3" maxlength="1000" placeholder="유권자 여러분께 전하는 공식 의정 소명, 법안 추진 현황 또는 브리핑을 입력해주세요..."
+                                  class="w-full text-xs px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-sky-300 dark:border-sky-700 focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-800 dark:text-slate-100"></textarea>
+                        <div class="flex justify-end">
+                            <button type="button" onclick="saveOfficeNotice()" class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-sky-600 hover:bg-sky-500 text-white transition-colors flex items-center space-x-1.5">
+                                <i class="fa-solid fa-floppy-disk"></i>
+                                <span>공식 브리핑 저장</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Community Discussion & Cheering Section -->
                 <div class="space-y-4 pt-2 border-t border-slate-200/80 dark:border-slate-800">
                     <div class="flex items-center justify-between">
@@ -501,6 +541,10 @@
                             <span id="modal-cheer-count" class="font-bold">0</span>
                         </button>
                     </div>
+
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400 bg-slate-100/80 dark:bg-slate-800/60 px-3 py-1.5 rounded-lg border border-slate-200/70 dark:border-slate-700/60">
+                        <i class="fa-solid fa-shield-halved text-sky-500 mr-1"></i>무기명으로 자유롭게 의견을 남겨주세요 (추후 간편인증 유권자 배지 도입 예정 · 도배 및 비방은 자동 제한됩니다)
+                    </p>
 
                     <!-- Comment Submission Box -->
                     <form id="comment-form" onsubmit="submitComment(event)" class="space-y-3 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800">
@@ -534,11 +578,122 @@
                     </form>
 
                     <!-- Comments Feed -->
-                    <div id="modal-comments-feed" class="space-y-2 max-h-60 overflow-y-auto pr-1">
+                    <div id="modal-comments-feed" class="space-y-2.5 max-h-96 overflow-y-auto pr-1">
                         <!-- Feed injected here -->
                     </div>
                 </div>
 
+            </div>
+        </div>
+    </div>
+
+    <!-- Official Office / Admin Login Modal -->
+    <div id="office-login-modal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-modal="true" role="dialog">
+        <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-xs transition-opacity" onclick="closeOfficeLoginModal()"></div>
+        <div class="relative min-h-screen flex items-center justify-center p-4">
+            <div class="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-700 p-6 sm:p-7 space-y-5">
+                <div class="flex items-start justify-between">
+                    <div class="space-y-1">
+                        <div class="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold verified-office-pill">
+                            <span>🏛️</span>
+                            <span>PoliRank 공식 파트너 인증</span>
+                        </div>
+                        <h3 class="text-lg font-black text-slate-900 dark:text-white pt-1">국회의원실 공식 계정 로그인</h3>
+                    </div>
+                    <button onclick="closeOfficeLoginModal()" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-rose-500 hover:text-white flex items-center justify-center transition-colors">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-200/80 dark:border-slate-700/80">
+                    국회의원실 공식 인증 계정으로 로그인하시면 유권자 댓글에 공식 대댓글 답변 및 의정 소명 공지를 작성하실 수 있습니다.
+                </p>
+
+                <form id="office-login-form" onsubmit="submitOfficeLogin(event)" class="space-y-3.5">
+                    <div>
+                        <label for="office-login-username" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">아이디</label>
+                        <input type="text" id="office-login-username" required autocomplete="username" placeholder="발급받은 의원실 또는 운영자 아이디"
+                               class="w-full text-sm px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-800 dark:text-slate-100">
+                    </div>
+                    <div>
+                        <label for="office-login-password" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">비밀번호</label>
+                        <input type="password" id="office-login-password" required autocomplete="current-password" placeholder="비밀번호 입력"
+                               class="w-full text-sm px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-800 dark:text-slate-100">
+                    </div>
+                    <button type="submit" class="w-full py-2.5 rounded-xl text-sm font-bold bg-sky-600 hover:bg-sky-500 text-white transition-all shadow-md shadow-sky-500/20 flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-right-to-bracket"></i>
+                        <span>로그인</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin B2B Office Account Issue Modal -->
+    <div id="admin-issue-modal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-modal="true" role="dialog">
+        <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-xs transition-opacity" onclick="closeAdminIssueModal()"></div>
+        <div class="relative min-h-screen flex items-center justify-center p-4">
+            <div class="relative w-full max-w-xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-700 p-6 sm:p-7 space-y-5">
+                <div class="flex items-start justify-between">
+                    <div class="space-y-1">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-400/40">
+                            ⚙️ 운영자 B2B 영업 · 파트너 관리 콘솔
+                        </span>
+                        <h3 class="text-lg font-black text-slate-900 dark:text-white pt-1">공식 의원실 계정 발급 & 인증 관리</h3>
+                    </div>
+                    <button onclick="closeAdminIssueModal()" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-rose-500 hover:text-white flex items-center justify-center transition-colors">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <form id="admin-issue-form" onsubmit="submitAdminIssueAccount(event)" class="space-y-3.5">
+                    <div class="space-y-1.5">
+                        <label for="admin-member-search" class="block text-xs font-bold text-slate-700 dark:text-slate-300">1. 대상 국회의원 선택 (299명)</label>
+                        <input type="text" id="admin-member-search" oninput="filterAdminMemberSelect()" placeholder="의원 이름, 정당 또는 지역구로 빠른 검색..."
+                               class="w-full text-xs px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500">
+                        <select id="admin-member-select" required
+                                class="w-full text-xs px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-800 dark:text-slate-100">
+                            <option value="">의원을 선택하세요...</option>
+                        </select>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label for="admin-issue-username" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">2. 발급 아이디</label>
+                            <input type="text" id="admin-issue-username" required minlength="3" placeholder="예: office_seo_yg"
+                                   class="w-full text-xs px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500">
+                        </div>
+                        <div>
+                            <label for="admin-issue-password" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">3. 초기 비밀번호</label>
+                            <input type="text" id="admin-issue-password" required minlength="4" placeholder="4자 이상 초기 비밀번호"
+                                   class="w-full text-xs px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500">
+                        </div>
+                    </div>
+
+                    <label class="flex items-center space-x-2 text-xs font-semibold text-slate-700 dark:text-slate-300 cursor-pointer">
+                        <input type="checkbox" id="admin-issue-verify" checked class="rounded border-slate-300 text-sky-600 focus:ring-sky-500">
+                        <span>발급과 동시에 <strong>✓ 공식 의원실 인증 배지</strong> 즉시 활성화</span>
+                    </label>
+
+                    <div class="flex flex-col sm:flex-row gap-2">
+                        <button type="submit" class="flex-1 py-2.5 px-4 rounded-xl text-xs font-bold bg-sky-600 hover:bg-sky-500 text-white transition-all shadow-md shadow-sky-500/20">
+                            🚀 발급 및 즉시 공식인증 부여
+                        </button>
+                        <button type="button" onclick="toggleSelectedMemberVerify()" class="py-2.5 px-3.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 transition-colors">
+                            🔄 인증 배지 토글
+                        </button>
+                    </div>
+                </form>
+
+                <div class="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <h4 class="text-xs font-bold text-slate-700 dark:text-slate-300">발급 완료된 공식 의원실 계정 목록</h4>
+                        <button type="button" onclick="loadAdminOfficeAccounts()" class="text-[11px] text-sky-500 hover:underline font-semibold">새로고침</button>
+                    </div>
+                    <div id="admin-accounts-list" class="max-h-40 overflow-y-auto space-y-1.5 text-xs">
+                        <p class="text-slate-400 text-[11px]">불러오는 중...</p>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

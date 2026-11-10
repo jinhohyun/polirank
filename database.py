@@ -4,11 +4,43 @@ PoliRank - SQLite 데이터베이스 스키마 및 CRUD 연동 모듈 (6대 지�
 import sqlite3
 import os
 import json
+import hashlib
+import hmac
+import secrets
 from collections import Counter
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "polirank.db")
+
+
+def hash_password(password: str, iterations: int = 120000) -> str:
+    """PBKDF2-HMAC-SHA256 + 랜덤 솔트 기반 안전한 비밀번호 해시 생성"""
+    salt_hex = secrets.token_hex(16)
+    dk = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        bytes.fromhex(salt_hex),
+        iterations,
+    ).hex()
+    return f"pbkdf2_sha256${iterations}${salt_hex}${dk}"
+
+
+def verify_password(password: str, stored_hash: str) -> bool:
+    """저장된 PBKDF2-HMAC-SHA256 해시와 입력 비밀번호 상수시간 비교 검증"""
+    try:
+        scheme, iter_s, salt_hex, expected_hex = stored_hash.split("$", 3)
+        if scheme != "pbkdf2_sha256":
+            return False
+        dk = hashlib.pbkdf2_hmac(
+            "sha256",
+            password.encode("utf-8"),
+            bytes.fromhex(salt_hex),
+            int(iter_s),
+        ).hex()
+        return hmac.compare_digest(dk, expected_hex)
+    except Exception:
+        return False
 
 def get_connection():
     conn = sqlite3.connect(DB_PATH)
@@ -66,6 +98,8 @@ def init_db():
         tier_title TEXT,
         weekly_stats_json TEXT,
         recent_bills_json TEXT,
+        is_verified_office INTEGER DEFAULT 0,
+        office_notice TEXT DEFAULT '',
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """)
@@ -85,6 +119,8 @@ def init_db():
         ("news_30d_count", "INTEGER DEFAULT 0"),
         ("controversy_news_count", "INTEGER DEFAULT 0"),
         ("recent_news_json", "TEXT"),
+        ("is_verified_office", "INTEGER DEFAULT 0"),
+        ("office_notice", "TEXT DEFAULT ''"),
     ]:
         if col_name not in existing_cols:
             cursor.execute(f"ALTER TABLE members ADD COLUMN {col_name} {col_def}")
@@ -98,17 +134,45 @@ def init_db():
     );
     """)
     
-    # 토론 및 응원 댓글 테이블
+    # 토론 및 응원 댓글 테이블 (v3.3 계층형 대댓글 & 공식 답변 지원)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS comments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         member_id TEXT NOT NULL,
         author TEXT NOT NULL,
-        stance TEXT DEFAULT 'cheer',  -- cheer(응원해요), critique(분발해요), proposal(정책제언)
+        stance TEXT DEFAULT 'cheer',  -- cheer(응원해요), critique(분발해요), proposal(정책제언), official(공식답변)
         content TEXT NOT NULL,
+        parent_id INTEGER DEFAULT NULL,
+        is_official_reply INTEGER DEFAULT 0,
+        official_badge_name TEXT DEFAULT '',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         likes INTEGER DEFAULT 0,
         FOREIGN KEY (member_id) REFERENCES members (id)
+    );
+    """)
+
+    cursor.execute("PRAGMA table_info(comments)")
+    existing_comment_cols = {row["name"] for row in cursor.fetchall()}
+    for col_name, col_def in [
+        ("parent_id", "INTEGER DEFAULT NULL"),
+        ("is_official_reply", "INTEGER DEFAULT 0"),
+        ("official_badge_name", "TEXT DEFAULT ''"),
+    ]:
+        if col_name not in existing_comment_cols:
+            cursor.execute(f"ALTER TABLE comments ADD COLUMN {col_name} {col_def}")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_comments_member_parent ON comments (member_id, parent_id, id);")
+
+    # 공식 의원실 & 운영자 계정 테이블
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS office_accounts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        member_id TEXT,
+        office_name TEXT NOT NULL,
+        role TEXT DEFAULT 'office',
+        is_active INTEGER DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """)
 
@@ -125,6 +189,22 @@ def init_db():
     """)
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_cheer_logs_member_cookie ON cheer_logs (member_id, cookie_hash);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_cheer_logs_member_ipua ON cheer_logs (member_id, ip_ua_hash);")
+
+    # 초기 운영자 계정 자동 부트스트랩 (없는 경우 생성, 환경변수 지정 시 해시 동기화)
+    env_admin_pw = os.environ.get("POLIRANK_ADMIN_PASSWORD")
+    cursor.execute("SELECT id, password_hash FROM office_accounts WHERE role = 'admin' LIMIT 1")
+    admin_row = cursor.fetchone()
+    if not admin_row:
+        initial_pw = env_admin_pw or "polirank_admin_2026!"
+        cursor.execute("""
+            INSERT INTO office_accounts (username, password_hash, member_id, office_name, role, is_active)
+            VALUES ('admin', ?, NULL, 'PoliRank 운영본부', 'admin', 1)
+        """, (hash_password(initial_pw),))
+    elif env_admin_pw and not verify_password(env_admin_pw, admin_row["password_hash"]):
+        cursor.execute(
+            "UPDATE office_accounts SET password_hash = ?, is_active = 1 WHERE id = ?",
+            (hash_password(env_admin_pw), admin_row["id"]),
+        )
     
     conn.commit()
     conn.close()
@@ -220,6 +300,8 @@ def get_all_members(party: Optional[str] = None, sort_by: str = "total", search:
         else:
             item["recent_news_items"] = []
             item["recent_news_titles"] = []
+        item["is_verified_office"] = int(item.get("is_verified_office") or 0)
+        item["office_notice"] = item.get("office_notice") or ""
         results.append(item)
         
     conn.close()
@@ -256,6 +338,8 @@ def get_member_by_id(member_id: str) -> Optional[Dict[str, Any]]:
     else:
         member["recent_news_items"] = []
         member["recent_news_titles"] = []
+    member["is_verified_office"] = int(member.get("is_verified_office") or 0)
+    member["office_notice"] = member.get("office_notice") or ""
 
     # 14대 내부 공공 팩트 지표 요약 시트
     vb = ws.get("vote_breakdown") or {}
@@ -346,7 +430,10 @@ def _refresh_fun_scores_in_conn(conn: sqlite3.Connection, member_id: str):
     m = dict(row)
     m["weekly_stats"] = json.loads(m["weekly_stats_json"]) if m.get("weekly_stats_json") else {}
 
-    cursor.execute("SELECT stance, COUNT(*) as c FROM comments WHERE member_id = ? GROUP BY stance", (member_id,))
+    cursor.execute(
+        "SELECT stance, COUNT(*) as c FROM comments WHERE member_id = ? AND COALESCE(is_official_reply, 0) = 0 GROUP BY stance",
+        (member_id,),
+    )
     c_stats = {r["stance"]: r["c"] for r in cursor.fetchall()}
 
     fun = calculate_fun_metrics(
@@ -455,43 +542,281 @@ def cheer_member(member_id: str) -> int:
     return res["cheer_count"]
 
 def get_comments(member_id: str, limit: int = 50) -> List[Dict[str, Any]]:
-    """특정 의원의 토론 댓글 목록 조회"""
+    """특정 의원의 토론 댓글 목록 조회 (계층형: 부모 댓글 + 공식 대댓글 우선 정렬 replies 배열)"""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT * FROM comments 
-        WHERE member_id = ? 
-        ORDER BY created_at DESC 
+        SELECT * FROM comments
+        WHERE member_id = ? AND parent_id IS NULL
+        ORDER BY id DESC
         LIMIT ?
     """, (member_id, limit))
-    rows = cursor.fetchall()
-    comments = [dict(row) for row in rows]
-    conn.close()
-    return comments
+    parents = []
+    parent_map: Dict[int, Dict[str, Any]] = {}
+    for row in cursor.fetchall():
+        c = dict(row)
+        c["is_official_reply"] = int(c.get("is_official_reply") or 0)
+        c["official_badge_name"] = c.get("official_badge_name") or ""
+        c["replies"] = []
+        parents.append(c)
+        parent_map[c["id"]] = c
 
-def add_comment(member_id: str, author: str, content: str, stance: str = "cheer") -> Dict[str, Any]:
-    """의원 상세 토론 댓글 등록"""
+    if parent_map:
+        placeholders = ",".join("?" for _ in parent_map)
+        cursor.execute(f"""
+            SELECT * FROM comments
+            WHERE member_id = ? AND parent_id IN ({placeholders})
+            ORDER BY COALESCE(is_official_reply, 0) DESC, id ASC
+        """, [member_id, *parent_map.keys()])
+        for row in cursor.fetchall():
+            r = dict(row)
+            r["is_official_reply"] = int(r.get("is_official_reply") or 0)
+            r["official_badge_name"] = r.get("official_badge_name") or ""
+            pid = r.get("parent_id")
+            if pid in parent_map:
+                parent_map[pid]["replies"].append(r)
+
+    conn.close()
+    return parents
+
+
+def add_comment(
+    member_id: str,
+    author: str,
+    content: str,
+    stance: str = "cheer",
+    parent_id: Optional[int] = None,
+    is_official_reply: bool = False,
+    official_badge_name: str = "",
+) -> Dict[str, Any]:
+    """의원 상세 토론 댓글 또는 공식 의원실 대댓글 등록"""
     conn = get_connection()
     cursor = conn.cursor()
-    created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    cursor.execute("""
-        INSERT INTO comments (member_id, author, stance, content, created_at, likes)
-        VALUES (?, ?, ?, ?, ?, 0)
-    """, (member_id, author.strip() or "익명 시민", stance, content.strip(), created_at))
-    new_id = cursor.lastrowid
-    _refresh_fun_scores_in_conn(conn, member_id)
-    conn.commit()
-    conn.close()
-    
-    return {
-        "id": new_id,
-        "member_id": member_id,
-        "author": author.strip() or "익명 시민",
-        "stance": stance,
-        "content": content.strip(),
-        "created_at": created_at,
-        "likes": 0
-    }
+    try:
+        if parent_id is not None:
+            cursor.execute(
+                "SELECT id, member_id, parent_id FROM comments WHERE id = ?",
+                (parent_id,),
+            )
+            parent_row = cursor.fetchone()
+            if not parent_row or parent_row["member_id"] != member_id or parent_row["parent_id"] is not None:
+                raise ValueError("유효하지 않은 대상 댓글입니다.")
+
+        created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        clean_author = (author or "").strip() or ("공식 의원실" if is_official_reply else "익명 유권자")
+        clean_content = content.strip()
+        resolved_stance = "official" if is_official_reply else (stance or "cheer")
+        official_flag = 1 if is_official_reply else 0
+        badge_name = (official_badge_name or "").strip() if is_official_reply else ""
+
+        cursor.execute("""
+            INSERT INTO comments (
+                member_id, author, stance, content, parent_id, is_official_reply, official_badge_name, created_at, likes
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
+        """, (
+            member_id,
+            clean_author,
+            resolved_stance,
+            clean_content,
+            parent_id,
+            official_flag,
+            badge_name,
+            created_at,
+        ))
+        new_id = cursor.lastrowid
+
+        if is_official_reply:
+            cursor.execute("UPDATE members SET is_verified_office = 1 WHERE id = ?", (member_id,))
+
+        _refresh_fun_scores_in_conn(conn, member_id)
+        conn.commit()
+        return {
+            "id": new_id,
+            "member_id": member_id,
+            "author": clean_author,
+            "stance": resolved_stance,
+            "content": clean_content,
+            "parent_id": parent_id,
+            "is_official_reply": official_flag,
+            "official_badge_name": badge_name,
+            "created_at": created_at,
+            "likes": 0,
+            "replies": [],
+        }
+    finally:
+        conn.close()
+
+
+def authenticate_office_account(username: str, password: str) -> Optional[Dict[str, Any]]:
+    """의원실/운영자 계정 아이디 & PBKDF2 비밀번호 인증"""
+    clean_user = (username or "").strip()
+    if not clean_user or not password:
+        return None
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT * FROM office_accounts WHERE username = ? AND is_active = 1 LIMIT 1",
+            (clean_user,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            return None
+        if not verify_password(password, row["password_hash"]):
+            return None
+        return {
+            "id": row["id"],
+            "username": row["username"],
+            "member_id": row["member_id"],
+            "office_name": row["office_name"],
+            "role": row["role"],
+            "is_active": int(row["is_active"]),
+        }
+    finally:
+        conn.close()
+
+
+def get_office_account_by_username(username: str) -> Optional[Dict[str, Any]]:
+    """활성화된 의원실/운영자 계정 안전 조회 (password_hash 미포함)"""
+    clean_user = (username or "").strip()
+    if not clean_user:
+        return None
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT id, username, member_id, office_name, role, is_active FROM office_accounts WHERE username = ? AND is_active = 1 LIMIT 1",
+            (clean_user,),
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def issue_office_account(
+    member_id: str,
+    username: str,
+    password: str,
+    verify_now: bool = True,
+    office_name: Optional[str] = None,
+) -> Dict[str, Any]:
+    """운영자 전용: 특정 의원의 공식 의원실 계정 발급/갱신 및 선택적 즉시 인증 배지 부여"""
+    clean_user = (username or "").strip()
+    if not clean_user or len(clean_user) < 3:
+        raise ValueError("아이디는 3자 이상이어야 합니다.")
+    if not password or len(password) < 4:
+        raise ValueError("비밀번호는 4자 이상이어야 합니다.")
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT id, name, is_verified_office FROM members WHERE id = ?", (member_id,))
+        member_row = cursor.fetchone()
+        if not member_row:
+            raise LookupError("Member not found")
+
+        cursor.execute("SELECT role FROM office_accounts WHERE username = ?", (clean_user,))
+        existing = cursor.fetchone()
+        if existing and existing["role"] == "admin":
+            raise ValueError("관리자 계정은 의원실 계정으로 덮어쓸 수 없습니다.")
+
+        resolved_office_name = (office_name or "").strip() or f"{member_row['name']} 의원실"
+        pw_hash = hash_password(password)
+
+        cursor.execute("""
+            INSERT INTO office_accounts (username, password_hash, member_id, office_name, role, is_active)
+            VALUES (?, ?, ?, ?, 'office', 1)
+            ON CONFLICT(username) DO UPDATE SET
+                password_hash = excluded.password_hash,
+                member_id = excluded.member_id,
+                office_name = excluded.office_name,
+                role = 'office',
+                is_active = 1
+        """, (clean_user, pw_hash, member_id, resolved_office_name))
+
+        verified_val = int(member_row["is_verified_office"] or 0)
+        if verify_now:
+            cursor.execute("UPDATE members SET is_verified_office = 1 WHERE id = ?", (member_id,))
+            verified_val = 1
+
+        conn.commit()
+        return {
+            "username": clean_user,
+            "member_id": member_id,
+            "member_name": member_row["name"],
+            "office_name": resolved_office_name,
+            "role": "office",
+            "is_verified_office": verified_val,
+        }
+    finally:
+        conn.close()
+
+
+def toggle_member_verification(member_id: str, verified: Optional[bool] = None) -> Optional[Dict[str, Any]]:
+    """운영자 전용: 특정 의원의 공식 의원실 인증 배지(0/1) 전환"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT id, name, is_verified_office FROM members WHERE id = ?", (member_id,))
+        row = cursor.fetchone()
+        if not row:
+            return None
+        current = int(row["is_verified_office"] or 0)
+        next_val = (1 if verified else 0) if verified is not None else (0 if current == 1 else 1)
+        cursor.execute("UPDATE members SET is_verified_office = ? WHERE id = ?", (next_val, member_id))
+        conn.commit()
+        return {
+            "member_id": member_id,
+            "name": row["name"],
+            "is_verified_office": next_val,
+        }
+    finally:
+        conn.close()
+
+
+def update_office_notice(member_id: str, office_notice: str) -> Optional[Dict[str, Any]]:
+    """의원실 공식 의정 브리핑/소명 공지 저장 및 공식 인증 활성화"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT id, name FROM members WHERE id = ?", (member_id,))
+        row = cursor.fetchone()
+        if not row:
+            return None
+        clean_notice = (office_notice or "").strip()
+        cursor.execute(
+            "UPDATE members SET office_notice = ?, is_verified_office = 1 WHERE id = ?",
+            (clean_notice, member_id),
+        )
+        conn.commit()
+        return {
+            "member_id": member_id,
+            "name": row["name"],
+            "office_notice": clean_notice,
+            "is_verified_office": 1,
+        }
+    finally:
+        conn.close()
+
+
+def list_office_accounts() -> List[Dict[str, Any]]:
+    """운영자용: 발급된 의원실 계정 및 인증 현황 조회 (해시 제외)"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT oa.id, oa.username, oa.member_id, oa.office_name, oa.role, oa.is_active, oa.created_at,
+                   m.name as member_name, m.party as member_party, COALESCE(m.is_verified_office, 0) as is_verified_office
+            FROM office_accounts oa
+            LEFT JOIN members m ON oa.member_id = m.id
+            WHERE oa.role = 'office'
+            ORDER BY oa.id DESC
+        """)
+        return [dict(r) for r in cursor.fetchall()]
+    finally:
+        conn.close()
 
 def get_summary_stats() -> Dict[str, Any]:
     """플랫폼 전체 요약 통계"""

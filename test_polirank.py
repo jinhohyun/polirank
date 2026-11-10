@@ -16,7 +16,7 @@ from seed_data import seed
 from scoring import calculate_member_scores, calculate_fun_metrics
 from avatar_generator import generate_caricature_svg
 from starlette.testclient import TestClient
-from app import app
+from app import app, COMMENT_RATE_LIMITS
 
 
 class TestPoliRankV3(unittest.TestCase):
@@ -26,6 +26,7 @@ class TestPoliRankV3(unittest.TestCase):
         cls._tmp_dir = tempfile.TemporaryDirectory()
         cls._test_db_path = os.path.join(cls._tmp_dir.name, "test_polirank.db")
         db_module.DB_PATH = cls._test_db_path
+        COMMENT_RATE_LIMITS.clear()
         seed(preserve_user_data=False)
         cls.client = TestClient(app)
 
@@ -152,6 +153,10 @@ class TestPoliRankV3(unittest.TestCase):
         self.assertIn('data-sort="hidden_gem"', res_root.text)
         self.assertIn("fun-mode-banner", res_root.text)
         self.assertIn("modal-fact-sheet-grid", res_root.text)
+        self.assertIn("office-login-modal", res_root.text)
+        self.assertIn("admin-issue-modal", res_root.text)
+        self.assertIn("modal-office-notice-section", res_root.text)
+        self.assertNotIn("polirank_admin_2026", res_root.text)
 
         res_meth_page = self.client.get("/methodology")
         self.assertEqual(res_meth_page.status_code, 200)
@@ -162,6 +167,10 @@ class TestPoliRankV3(unittest.TestCase):
         self.assertEqual(res_js.status_code, 200)
         self.assertIn("renderModalFactSheet14", res_js.text)
         self.assertIn("renderModalNews", res_js.text)
+        self.assertIn("submitOfficeLogin", res_js.text)
+        self.assertIn("submitAdminIssueAccount", res_js.text)
+        self.assertIn("submitOfficialReply", res_js.text)
+        self.assertNotIn("polirank_admin_2026", res_js.text)
         self.assertIn("loadMyCheers", res_js.text)
         self.assertIn("already_cheered", res_js.text)
         self.assertIn('loading="lazy"', res_js.text)
@@ -386,17 +395,192 @@ class TestPoliRankV3(unittest.TestCase):
         client_b.close()
         print(f"[PASS] 3-Layer Duplicate Cheer Prevention verified for {target['name']}: 0->1, same cookie 409, cleared cookie 409, IP/UA spoof 409, visitor B 1->2.")
 
-    def test_08_preserve_real_user_data_on_weekly_seed(self):
-        """주간 자동 업데이트(seed preserve_user_data=True) 시 실제 유저 응원/댓글/cheer_logs 100% 보존 검증"""
+    def test_08_office_auth_b2b_issue_official_reply_and_notice(self):
+        """v3.3 운영자 B2B 의원실 계정 발급 · 인증 배지 · 권한 격리(401/403) · 계층형 공식 대댓글 및 공지 검증"""
+        members = self.client.get("/api/members").json()["members"]
+        self.assertTrue(all(int(m.get("is_verified_office", 0)) == 0 for m in members))
+
+        target = next((m for m in members if m["name"] == "서영교"), members[0])
+        other = next((m for m in members if m["id"] != target["id"]), members[1])
+        target_id = target["id"]
+        other_id = other["id"]
+
+        # 1) 비로그인 상태에서 /api/office/me & admin 엔드포인트 차단 확인
+        me_anon = self.client.get("/api/office/me")
+        self.assertEqual(me_anon.status_code, 200)
+        self.assertFalse(me_anon.json()["authenticated"])
+
+        unauth_issue = self.client.post(
+            "/api/admin/issue-office-account",
+            json={"member_id": target_id, "username": "unauth_try", "password": "pw1234", "verify_now": True},
+        )
+        self.assertEqual(unauth_issue.status_code, 401)
+
+        # 2) 운영자 로그인 & 의원실 계정 발급
+        admin_client = TestClient(app)
+        admin_pw = os.environ.get("POLIRANK_ADMIN_PASSWORD") or "polirank_admin_2026!"
+        bad_login = admin_client.post("/api/office/login", json={"username": "admin", "password": "wrong_password"})
+        self.assertEqual(bad_login.status_code, 401)
+
+        res_admin_login = admin_client.post("/api/office/login", json={"username": "admin", "password": admin_pw})
+        self.assertEqual(res_admin_login.status_code, 200)
+        self.assertEqual(res_admin_login.json()["role"], "admin")
+        self.assertIn("polirank_office_session", admin_client.cookies)
+
+        res_issue = admin_client.post(
+            "/api/admin/issue-office-account",
+            json={
+                "member_id": target_id,
+                "username": "office_seoyg_test",
+                "password": "office_pass_2026!",
+                "verify_now": True,
+            },
+        )
+        self.assertEqual(res_issue.status_code, 200)
+        issued = res_issue.json()["account"]
+        self.assertEqual(issued["member_id"], target_id)
+        self.assertEqual(issued["is_verified_office"], 1)
+
+        # 해시 미노출 확인 + toggle-verify 테스트
+        res_acc_list = admin_client.get("/api/admin/office-accounts")
+        self.assertEqual(res_acc_list.status_code, 200)
+        self.assertNotIn("password_hash", str(res_acc_list.json()))
+
+        res_tog_off = admin_client.post("/api/admin/toggle-verify", json={"member_id": target_id})
+        self.assertEqual(res_tog_off.status_code, 200)
+        self.assertEqual(res_tog_off.json()["is_verified_office"], 0)
+        res_tog_on = admin_client.post("/api/admin/toggle-verify", json={"member_id": target_id})
+        self.assertEqual(res_tog_on.status_code, 200)
+        self.assertEqual(res_tog_on.json()["is_verified_office"], 1)
+
+        # 3) 발급된 의원실 계정으로 로그인 & 관리자 API 접근 차단(403)
+        office_client = TestClient(app)
+        res_off_login = office_client.post(
+            "/api/office/login",
+            json={"username": "office_seoyg_test", "password": "office_pass_2026!"},
+        )
+        self.assertEqual(res_off_login.status_code, 200)
+        self.assertEqual(res_off_login.json()["role"], "office")
+        self.assertEqual(res_off_login.json()["member_id"], target_id)
+
+        self.assertEqual(
+            office_client.post(
+                "/api/admin/issue-office-account",
+                json={"member_id": other_id, "username": "hack", "password": "pw1234", "verify_now": True},
+            ).status_code,
+            403,
+        )
+
+        # 4) 일반 시민 댓글 작성 후 타 의원 페이지 공식 답변 차단(403) + 본인 의원 공식 대댓글 작성(200)
+        res_citizen = self.client.post(
+            f"/api/members/{target_id}/comments",
+            headers={"User-Agent": "CitizenOfficeFlow/1.0", "X-Forwarded-For": "198.51.100.11"},
+            json={"author": "지역 유권자", "stance": "proposal", "content": "지역 교통 개선 법안 일정이 궁금합니다."},
+        )
+        self.assertEqual(res_citizen.status_code, 200)
+        parent_id = res_citizen.json()["comment"]["id"]
+
+        res_citizen_other = self.client.post(
+            f"/api/members/{other_id}/comments",
+            headers={"User-Agent": "CitizenOtherFlow/1.0", "X-Forwarded-For": "198.51.100.12"},
+            json={"author": "시민B", "stance": "cheer", "content": "응원합니다."},
+        )
+        other_parent_id = res_citizen_other.json()["comment"]["id"]
+
+        # 비로그인 공식 대댓글 -> 401
+        res_unauth_reply = TestClient(app).post(
+            f"/api/members/{target_id}/comments",
+            json={"content": "무단 공식 답변", "parent_id": parent_id, "is_official_reply": True},
+        )
+        self.assertEqual(res_unauth_reply.status_code, 401)
+
+        # 타 의원 페이지에 공식 대댓글 시도 -> 403
+        res_cross_reply = office_client.post(
+            f"/api/members/{other_id}/comments",
+            json={"content": "타 의원 답변 시도", "parent_id": other_parent_id, "is_official_reply": True},
+        )
+        self.assertEqual(res_cross_reply.status_code, 403)
+
+        # 본인 의원 페이지 공식 대댓글 작성 -> 200 & 계층형 replies 반환 확인
+        res_ok_reply = office_client.post(
+            f"/api/members/{target_id}/comments",
+            json={"content": "안녕하세요, 의원실입니다. 다음 주 상임위 소위에서 상정 논의 예정입니다.", "parent_id": parent_id, "is_official_reply": True},
+        )
+        self.assertEqual(res_ok_reply.status_code, 200)
+        self.assertEqual(res_ok_reply.json()["comment"]["is_official_reply"], 1)
+
+        res_tree = self.client.get(f"/api/members/{target_id}/comments").json()
+        matched_parent = next((c for c in res_tree["comments"] if c["id"] == parent_id), None)
+        self.assertIsNotNone(matched_parent)
+        self.assertEqual(len(matched_parent["replies"]), 1)
+        self.assertEqual(matched_parent["replies"][0]["is_official_reply"], 1)
+        self.assertIn("의원실 공식", matched_parent["replies"][0]["official_badge_name"])
+
+        # 5) 공식 의정 브리핑 등록 및 타 의원 수정 차단(403)
+        res_cross_notice = office_client.post("/api/office/notice", json={"notice": "무단 수정", "member_id": other_id})
+        self.assertEqual(res_cross_notice.status_code, 403)
+
+        res_notice = office_client.post(
+            "/api/office/notice",
+            json={"notice": "제22대 국회 민생 입법 현황을 투명하게 공유드리겠습니다.", "member_id": target_id},
+        )
+        self.assertEqual(res_notice.status_code, 200)
+        detail = self.client.get(f"/api/members/{target_id}").json()
+        self.assertEqual(detail["is_verified_office"], 1)
+        self.assertIn("민생 입법 현황", detail["office_notice"])
+
+        admin_client.close()
+        office_client.close()
+        print(f"[PASS] v3.3 B2B Office Auth, Verification Badge, Cross-MP 403 Guard, Hierarchical Reply & Notice verified for {target['name']}.")
+
+    def test_09_citizen_anonymous_comments_profanity_and_rate_limit(self):
+        """무기명 시민 댓글 정상 등록, 유해어 차단(400) 및 15초 연속 도배 방지(429) 검증"""
+        members = self.client.get("/api/members").json()["members"]
+        target_id = members[3]["id"]
+        headers_spam = {"User-Agent": "CitizenSpamTester/1.0", "X-Forwarded-For": "198.51.100.77"}
+
+        res_first = self.client.post(
+            f"/api/members/{target_id}/comments",
+            headers=headers_spam,
+            json={"author": "", "stance": "cheer", "content": "지역구 민생 법안 꼼꼼히 챙겨주세요!"},
+        )
+        self.assertEqual(res_first.status_code, 200)
+        self.assertEqual(res_first.json()["comment"]["is_official_reply"], 0)
+        self.assertEqual(res_first.json()["comment"]["author"], "익명 유권자")
+
+        # 15초 이내 동일 IP+UA 연속 도배 -> 429 차단
+        res_rapid = self.client.post(
+            f"/api/members/{target_id}/comments",
+            headers=headers_spam,
+            json={"author": "도배러", "stance": "critique", "content": "연속 도배 테스트"},
+        )
+        self.assertEqual(res_rapid.status_code, 429)
+        self.assertEqual(res_rapid.json()["status"], "rate_limited")
+
+        # 심한 비속어 필터 -> 400 차단
+        res_profane = self.client.post(
+            f"/api/members/{target_id}/comments",
+            headers={"User-Agent": "ProfanityTest/1.0", "X-Forwarded-For": "198.51.100.78"},
+            json={"author": "시민", "stance": "critique", "content": "이런 씨발 같은 테스트"},
+        )
+        self.assertEqual(res_profane.status_code, 400)
+        print("[PASS] Citizen Anonymous Comment, 15s Rate-Limit (429) & Profanity Filter (400) verified.")
+
+    def test_10_preserve_real_user_data_on_weekly_seed(self):
+        """주간 자동 업데이트(seed preserve_user_data=True) 시 실제 유저 응원/댓글/의원실 인증·공지 100% 보존 검증"""
         conn = get_connection()
         before_cheers = conn.execute("SELECT COALESCE(SUM(cheer_count), 0) FROM members").fetchone()[0]
         before_comments = conn.execute("SELECT COUNT(*) FROM comments").fetchone()[0]
         before_logs = conn.execute("SELECT COUNT(*) FROM cheer_logs").fetchone()[0]
+        before_verified = conn.execute("SELECT COUNT(*) FROM members WHERE is_verified_office = 1").fetchone()[0]
+        before_accounts = conn.execute("SELECT COUNT(*) FROM office_accounts").fetchone()[0]
         conn.close()
 
         self.assertGreater(before_cheers, 0)
         self.assertGreater(before_comments, 0)
         self.assertGreater(before_logs, 0)
+        self.assertGreater(before_verified, 0)
+        self.assertGreaterEqual(before_accounts, 2)
 
         seed(preserve_user_data=True)
 
@@ -404,12 +588,16 @@ class TestPoliRankV3(unittest.TestCase):
         after_cheers = conn.execute("SELECT COALESCE(SUM(cheer_count), 0) FROM members").fetchone()[0]
         after_comments = conn.execute("SELECT COUNT(*) FROM comments").fetchone()[0]
         after_logs = conn.execute("SELECT COUNT(*) FROM cheer_logs").fetchone()[0]
+        after_verified = conn.execute("SELECT COUNT(*) FROM members WHERE is_verified_office = 1").fetchone()[0]
+        after_accounts = conn.execute("SELECT COUNT(*) FROM office_accounts").fetchone()[0]
         conn.close()
 
         self.assertEqual(after_cheers, before_cheers)
         self.assertEqual(after_comments, before_comments)
         self.assertEqual(after_logs, before_logs)
-        print(f"[PASS] Weekly seed(preserve_user_data=True) lossless preservation verified: cheers={after_cheers}, comments={after_comments}, logs={after_logs}")
+        self.assertEqual(after_verified, before_verified)
+        self.assertEqual(after_accounts, before_accounts)
+        print(f"[PASS] Weekly seed(preserve_user_data=True) lossless preservation verified: cheers={after_cheers}, comments={after_comments}, logs={after_logs}, verified={after_verified}, accounts={after_accounts}")
 
 
 if __name__ == "__main__":

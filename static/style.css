@@ -164,3 +164,17 @@
 .toast-animate {
     animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* Verified Official Office Badge */
+.verified-office-pill {
+    background: linear-gradient(135deg, rgba(14, 165, 233, 0.14) 0%, rgba(59, 130, 246, 0.18) 100%);
+    color: #0284C7;
+    border: 1px solid rgba(14, 165, 233, 0.42);
+    box-shadow: 0 2px 8px -2px rgba(14, 165, 233, 0.25);
+}
+
+.dark .verified-office-pill {
+    background: linear-gradient(135deg, rgba(14, 165, 233, 0.22) 0%, rgba(59, 130, 246, 0.24) 100%);
+    color: #38BDF8;
+    border: 1px solid rgba(56, 189, 248, 0.45);
+}

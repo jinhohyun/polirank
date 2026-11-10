@@ -18,6 +18,17 @@ let isModalPhotoView = false;
 const CHEER_STORAGE_KEY = 'polirank_cheered_members';
 let cheeredSet = new Set();
 const cheerInFlight = new Set();
+let officeSession = { authenticated: false, username: null, role: null, member_id: null, office_name: null };
+
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
 
 // DOM Elements
 const membersGrid = document.getElementById('members-grid');
@@ -55,6 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadLocalCheers();
     loadSummaryStats();
     loadMyCheers();
+    loadOfficeSession();
     loadMembers();
     setupEventListeners();
 });
@@ -224,6 +236,14 @@ function setupEventListeners() {
             const methModal = document.getElementById('methodology-modal');
             if (methModal && !methModal.classList.contains('hidden')) {
                 closeMethodologyModal();
+            }
+            const loginModal = document.getElementById('office-login-modal');
+            if (loginModal && !loginModal.classList.contains('hidden')) {
+                closeOfficeLoginModal();
+            }
+            const adminModal = document.getElementById('admin-issue-modal');
+            if (adminModal && !adminModal.classList.contains('hidden')) {
+                closeAdminIssueModal();
             }
         }
     });
@@ -552,10 +572,13 @@ function createMemberCardElement(member, displayRank, rankText, isTied) {
             
             <!-- Member Identity -->
             <div class="mt-2 space-y-0.5">
-                <div class="flex items-center justify-center space-x-1.5">
+                <div class="flex flex-wrap items-center justify-center gap-1">
                     <h3 class="text-lg font-black text-slate-900 dark:text-white tracking-tight group-hover:text-sky-500 transition-colors">${member.name}</h3>
                     <span class="text-xs text-slate-400">${member.hanja_name || ''}</span>
                     <span class="text-[11px] font-semibold text-slate-400">(${member.terms}선)</span>
+                    ${Number(member.is_verified_office) === 1
+                        ? `<span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold verified-office-pill" title="공식 의원실 직접 인증"><i class="fa-solid fa-circle-check text-sky-500"></i>공식 인증</span>`
+                        : ''}
                 </div>
                 <div class="flex items-center justify-center space-x-1.5">
                     <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold text-white shadow-xs" style="background-color: ${member.party_color}">
@@ -923,6 +946,16 @@ async function openModal(memberId) {
         document.getElementById('modal-cheer-count').textContent = member.cheer_count;
         updateCheerButtonsUI(member.id);
 
+        const verifiedBadge = document.getElementById('modal-verified-badge');
+        if (verifiedBadge) {
+            if (Number(member.is_verified_office) === 1) {
+                verifiedBadge.classList.remove('hidden');
+            } else {
+                verifiedBadge.classList.add('hidden');
+            }
+        }
+        renderModalOfficeNotice(member);
+
         renderModalBills(member.recent_bills || []);
         renderRadarChart(member);
         loadModalComments(member.id);
@@ -1214,18 +1247,24 @@ function renderRadarChart(member) {
     });
 }
 
-// Load Comments Feed in Modal
+// Load Comments Feed in Modal (v3.3 Hierarchical Replies & Official Office Answers)
 async function loadModalComments(memberId) {
     const feed = document.getElementById('modal-comments-feed');
     const countBadge = document.getElementById('modal-comment-count-badge');
     if (!feed) return;
 
+    const isOwnOffice = Boolean(
+        officeSession.authenticated &&
+        officeSession.role === 'office' &&
+        officeSession.member_id === memberId
+    );
+
     try {
-        const res = await fetch(`/api/members/${memberId}/comments`);
+        const res = await fetch(`/api/members/${memberId}/comments`, { credentials: 'same-origin' });
         const data = await res.json();
         const comments = data.comments || [];
 
-        if (countBadge) countBadge.textContent = `${comments.length}건`;
+        if (countBadge) countBadge.textContent = `${data.count ?? comments.length}건`;
 
         if (comments.length === 0) {
             feed.innerHTML = `<p class="text-xs text-slate-400 py-4 text-center">첫 번째 시민 의견을 남겨주세요!</p>`;
@@ -1242,16 +1281,62 @@ async function loadModalComments(memberId) {
                 stanceBadge = '<span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/30 font-semibold">🧐 분발</span>';
             }
 
+            const repliesHtml = (c.replies || []).map(r => {
+                if (Number(r.is_official_reply) === 1) {
+                    const badgeLabel = escapeHtml(r.official_badge_name || `${currentMember?.name || ''} 의원실 공식`);
+                    return `
+                        <div class="ml-5 sm:ml-6 mt-2 pl-3 pr-2.5 py-2.5 border-l-2 border-sky-500 bg-sky-500/5 dark:bg-sky-500/10 rounded-r-xl space-y-1">
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold verified-office-pill">
+                                    <span>🏛️</span>
+                                    <span>${badgeLabel} 답변</span>
+                                    <i class="fa-solid fa-circle-check text-sky-500"></i>
+                                </span>
+                                <span class="text-[10px] text-slate-400">${escapeHtml(r.created_at || '방금')}</span>
+                            </div>
+                            <p class="text-xs text-slate-700 dark:text-slate-200 leading-relaxed whitespace-pre-line">${escapeHtml(r.content)}</p>
+                        </div>
+                    `;
+                }
+                return `
+                    <div class="ml-5 sm:ml-6 mt-2 pl-3 pr-2.5 py-2 border-l-2 border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50 rounded-r-xl space-y-1">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[11px] font-bold text-slate-700 dark:text-slate-300">${escapeHtml(r.author)}</span>
+                            <span class="text-[10px] text-slate-400">${escapeHtml(r.created_at || '최근')}</span>
+                        </div>
+                        <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">${escapeHtml(r.content)}</p>
+                    </div>
+                `;
+            }).join('');
+
+            const replyActionHtml = isOwnOffice ? `
+                <div class="pt-1 flex justify-end">
+                    <button type="button" onclick="toggleOfficialReplyForm(${c.id})" class="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 dark:text-sky-400 border border-sky-400/30 transition-colors">
+                        <span>🏛️ 공식 대댓글 달기</span>
+                    </button>
+                </div>
+                <form id="official-reply-form-${c.id}" onsubmit="submitOfficialReply(event, ${c.id})" class="hidden mt-2 pt-2 border-t border-sky-400/20 space-y-2">
+                    <textarea id="official-reply-input-${c.id}" rows="2" maxlength="600" required placeholder="${escapeHtml(currentMember?.name || '')} 의원실 공식 답변을 작성해주세요..."
+                              class="w-full text-xs px-3 py-2 rounded-xl bg-sky-50/70 dark:bg-slate-900 border border-sky-300 dark:border-sky-700 focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-800 dark:text-slate-100"></textarea>
+                    <div class="flex justify-end space-x-1.5">
+                        <button type="button" onclick="toggleOfficialReplyForm(${c.id})" class="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">취소</button>
+                        <button type="submit" class="px-3 py-1 rounded-lg text-[11px] font-bold bg-sky-600 hover:bg-sky-500 text-white">공식 답변 등록</button>
+                    </div>
+                </form>
+            ` : '';
+
             return `
-                <div class="p-3 rounded-xl bg-white dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 space-y-1">
+                <div class="p-3 rounded-xl bg-white dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 space-y-1.5">
                     <div class="flex items-center justify-between">
                         <div class="flex items-center space-x-2">
-                            <span class="text-xs font-bold text-slate-800 dark:text-slate-200">${c.author}</span>
+                            <span class="text-xs font-bold text-slate-800 dark:text-slate-200">${escapeHtml(c.author)}</span>
                             ${stanceBadge}
                         </div>
-                        <span class="text-[10px] text-slate-400">${c.created_at || '최근'}</span>
+                        <span class="text-[10px] text-slate-400">${escapeHtml(c.created_at || '최근')}</span>
                     </div>
-                    <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">${c.content}</p>
+                    <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line">${escapeHtml(c.content)}</p>
+                    ${replyActionHtml}
+                    ${repliesHtml}
                 </div>
             `;
         }).join('');
@@ -1260,7 +1345,7 @@ async function loadModalComments(memberId) {
     }
 }
 
-// Submit New Comment
+// Submit New Citizen Comment
 async function submitComment(e) {
     e.preventDefault();
     if (!currentMember) return;
@@ -1282,18 +1367,418 @@ async function submitComment(e) {
         const res = await fetch(`/api/members/${currentMember.id}/comments`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify({ author, content, stance })
         });
         const data = await res.json();
-        if (data.status === 'success') {
+        if (res.ok && data.status === 'success') {
             contentInput.value = '';
             showToast('의견이 성공적으로 등록되었습니다!', 'success');
             loadModalComments(currentMember.id);
             loadSummaryStats();
+        } else {
+            showToast(data.detail || data.message || '댓글 등록에 실패했습니다.', 'error');
         }
     } catch (err) {
         console.error('Failed to submit comment', err);
         showToast('댓글 등록 중 오류가 발생했습니다.', 'error');
+    }
+}
+
+// Official Office Session, Notice, Replies & Admin B2B Functions (v3.3)
+async function loadOfficeSession() {
+    try {
+        const res = await fetch('/api/office/me', { credentials: 'same-origin' });
+        if (!res.ok) return;
+        const data = await res.json();
+        officeSession = data && data.authenticated
+            ? data
+            : { authenticated: false, username: null, role: null, member_id: null, office_name: null };
+        renderOfficeAuthHeader();
+    } catch (err) {
+        console.warn('Failed to load office session', err);
+    }
+}
+
+function renderOfficeAuthHeader() {
+    const container = document.getElementById('office-auth-controls');
+    if (!container) return;
+
+    if (!officeSession.authenticated) {
+        container.innerHTML = `
+            <button onclick="openOfficeLoginModal()" class="inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-sky-50 dark:hover:bg-sky-950/50 hover:text-sky-600 dark:hover:text-sky-400 transition-all border border-slate-200 dark:border-slate-700">
+                <span>🏛️</span>
+                <span class="hidden sm:inline">의원실 로그인</span>
+                <span class="sm:hidden">로그인</span>
+            </button>
+        `;
+        return;
+    }
+
+    if (officeSession.role === 'admin') {
+        container.innerHTML = `
+            <button onclick="openAdminIssueModal()" class="inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-300 border border-amber-400/40 transition-all">
+                <span>⚙️</span>
+                <span class="hidden sm:inline">의원실 계정 발급</span>
+                <span class="sm:hidden">계정관리</span>
+            </button>
+            <button onclick="logoutOfficeSession()" class="px-2.5 py-2 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-rose-500 hover:text-white border border-slate-200 dark:border-slate-700 transition-colors">
+                로그아웃
+            </button>
+        `;
+        return;
+    }
+
+    container.innerHTML = `
+        <button onclick="openMemberFromOfficeSession()" class="inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-bold verified-office-pill hover:opacity-90 transition-all">
+            <i class="fa-solid fa-circle-check text-sky-500"></i>
+            <span>${escapeHtml(officeSession.office_name || '공식 의원실')}</span>
+        </button>
+        <button onclick="logoutOfficeSession()" class="px-2.5 py-2 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-rose-500 hover:text-white border border-slate-200 dark:border-slate-700 transition-colors">
+            로그아웃
+        </button>
+    `;
+}
+
+function openMemberFromOfficeSession() {
+    if (officeSession.authenticated && officeSession.member_id) {
+        openModal(officeSession.member_id);
+    }
+}
+
+function openOfficeLoginModal() {
+    const modal = document.getElementById('office-login-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        document.getElementById('office-login-username')?.focus();
+    }
+}
+
+function closeOfficeLoginModal() {
+    document.getElementById('office-login-modal')?.classList.add('hidden');
+}
+
+async function submitOfficeLogin(e) {
+    e.preventDefault();
+    const username = document.getElementById('office-login-username')?.value.trim() || '';
+    const password = document.getElementById('office-login-password')?.value || '';
+
+    try {
+        const res = await fetch('/api/office/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            showToast(data.detail || '로그인에 실패했습니다.', 'error');
+            return;
+        }
+
+        officeSession = data;
+        document.getElementById('office-login-form')?.reset();
+        closeOfficeLoginModal();
+        renderOfficeAuthHeader();
+        showToast(`${data.office_name} 계정으로 로그인되었습니다!`, 'success');
+
+        if (currentMember) {
+            renderModalOfficeNotice(currentMember);
+            loadModalComments(currentMember.id);
+        } else if (data.role === 'admin') {
+            openAdminIssueModal();
+        } else if (data.role === 'office' && data.member_id) {
+            openModal(data.member_id);
+        }
+    } catch (err) {
+        console.error('Login error', err);
+        showToast('로그인 중 네트워크 오류가 발생했습니다.', 'error');
+    }
+}
+
+async function logoutOfficeSession() {
+    try {
+        await fetch('/api/office/logout', { method: 'POST', credentials: 'same-origin' });
+    } catch (err) {
+        console.warn('Logout warning', err);
+    }
+    officeSession = { authenticated: false, username: null, role: null, member_id: null, office_name: null };
+    renderOfficeAuthHeader();
+    closeAdminIssueModal();
+    if (currentMember) {
+        renderModalOfficeNotice(currentMember);
+        loadModalComments(currentMember.id);
+    }
+    showToast('로그아웃되었습니다.', 'info');
+}
+
+function syncMemberVerificationInMemory(memberId, isVerified, officeNotice = undefined) {
+    const applyPatch = (m) => {
+        if (!m || m.id !== memberId) return;
+        m.is_verified_office = isVerified ? 1 : 0;
+        if (officeNotice !== undefined) m.office_notice = officeNotice;
+    };
+    allMembers.forEach(applyPatch);
+    filteredMembers.forEach(applyPatch);
+    if (currentMember && currentMember.id === memberId) {
+        applyPatch(currentMember);
+        const verifiedBadge = document.getElementById('modal-verified-badge');
+        if (verifiedBadge) {
+            verifiedBadge.classList.toggle('hidden', !isVerified);
+        }
+    }
+    applyFiltersAndRender();
+}
+
+function renderModalOfficeNotice(member) {
+    const section = document.getElementById('modal-office-notice-section');
+    const titleEl = document.getElementById('modal-office-notice-title');
+    const textEl = document.getElementById('modal-office-notice-text');
+    const editorEl = document.getElementById('office-notice-editor');
+    const inputEl = document.getElementById('office-notice-input');
+    if (!section || !textEl) return;
+
+    const isOwnOffice = Boolean(
+        officeSession.authenticated &&
+        officeSession.role === 'office' &&
+        officeSession.member_id === member.id
+    );
+    const hasNotice = Boolean((member.office_notice || '').trim());
+
+    if (!hasNotice && !isOwnOffice) {
+        section.classList.add('hidden');
+        return;
+    }
+
+    section.classList.remove('hidden');
+    if (titleEl) {
+        titleEl.textContent = `${member.name} 의원실 공식 의정 브리핑`;
+    }
+    textEl.textContent = hasNotice
+        ? member.office_notice
+        : '아직 등록된 공식 의정 브리핑이 없습니다. 아래에서 유권자에게 전할 첫 브리핑을 작성해보세요.';
+
+    if (editorEl) {
+        editorEl.classList.toggle('hidden', !isOwnOffice);
+    }
+    if (inputEl && isOwnOffice) {
+        inputEl.value = member.office_notice || '';
+    }
+}
+
+async function saveOfficeNotice() {
+    if (!currentMember) return;
+    const noticeInput = document.getElementById('office-notice-input');
+    const notice = noticeInput ? noticeInput.value.trim() : '';
+
+    try {
+        const res = await fetch('/api/office/notice', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ notice, member_id: currentMember.id })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            showToast(data.detail || '공식 브리핑 저장에 실패했습니다.', 'error');
+            return;
+        }
+        syncMemberVerificationInMemory(currentMember.id, true, data.office_notice);
+        renderModalOfficeNotice(currentMember);
+        showToast('공식 의정 브리핑이 저장 및 인증 반영되었습니다! 📌', 'success');
+    } catch (err) {
+        console.error('Save notice error', err);
+        showToast('브리핑 저장 중 오류가 발생했습니다.', 'error');
+    }
+}
+
+function toggleOfficialReplyForm(parentId) {
+    const form = document.getElementById(`official-reply-form-${parentId}`);
+    if (!form) return;
+    const willOpen = form.classList.contains('hidden');
+    form.classList.toggle('hidden', !willOpen);
+    if (willOpen) {
+        document.getElementById(`official-reply-input-${parentId}`)?.focus();
+    }
+}
+
+async function submitOfficialReply(e, parentId) {
+    e.preventDefault();
+    if (!currentMember) return;
+    const input = document.getElementById(`official-reply-input-${parentId}`);
+    const content = input ? input.value.trim() : '';
+    if (!content) {
+        showToast('공식 답변 내용을 입력해주세요.', 'error');
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/members/${currentMember.id}/comments`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({
+                content,
+                parent_id: parentId,
+                is_official_reply: true,
+                stance: 'official'
+            })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            showToast(data.detail || '공식 대댓글 등록에 실패했습니다.', 'error');
+            return;
+        }
+        syncMemberVerificationInMemory(currentMember.id, true);
+        showToast('의원실 공식 대댓글이 등록되었습니다! 🏛️', 'success');
+        loadModalComments(currentMember.id);
+        loadSummaryStats();
+    } catch (err) {
+        console.error('Official reply failed', err);
+        showToast('공식 답변 등록 중 오류가 발생했습니다.', 'error');
+    }
+}
+
+// Admin B2B Issuance Console Helpers
+async function openAdminIssueModal() {
+    const modal = document.getElementById('admin-issue-modal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    if (allMembers.length === 0) {
+        await loadMembers();
+    }
+    populateAdminMemberSelect();
+    loadAdminOfficeAccounts();
+}
+
+function closeAdminIssueModal() {
+    document.getElementById('admin-issue-modal')?.classList.add('hidden');
+}
+
+function populateAdminMemberSelect(filterText = '') {
+    const select = document.getElementById('admin-member-select');
+    if (!select) return;
+    const prevValue = select.value;
+    const q = filterText.trim().toLowerCase();
+    const list = allMembers
+        .filter(m => !q || m.name.toLowerCase().includes(q) || m.party.toLowerCase().includes(q) || m.district.toLowerCase().includes(q))
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+
+    select.innerHTML = `<option value="">의원을 선택하세요 (${list.length}명)...</option>` + list.map(m => {
+        const badge = Number(m.is_verified_office) === 1 ? ' ✓인증' : '';
+        return `<option value="${m.id}">${escapeHtml(m.name)} (${escapeHtml(m.party)} · ${escapeHtml(m.district)})${badge}</option>`;
+    }).join('');
+    if (prevValue && list.some(m => m.id === prevValue)) {
+        select.value = prevValue;
+    }
+}
+
+function filterAdminMemberSelect() {
+    const q = document.getElementById('admin-member-search')?.value || '';
+    populateAdminMemberSelect(q);
+}
+
+async function submitAdminIssueAccount(e) {
+    e.preventDefault();
+    const memberId = document.getElementById('admin-member-select')?.value || '';
+    const username = document.getElementById('admin-issue-username')?.value.trim() || '';
+    const password = document.getElementById('admin-issue-password')?.value || '';
+    const verifyNow = Boolean(document.getElementById('admin-issue-verify')?.checked);
+
+    if (!memberId) {
+        showToast('대상 국회의원을 선택해주세요.', 'error');
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/admin/issue-office-account', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ member_id: memberId, username, password, verify_now: verifyNow })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            showToast(data.detail || '계정 발급에 실패했습니다.', 'error');
+            return;
+        }
+        const acc = data.account;
+        syncMemberVerificationInMemory(acc.member_id, Number(acc.is_verified_office) === 1);
+        populateAdminMemberSelect(document.getElementById('admin-member-search')?.value || '');
+        loadAdminOfficeAccounts();
+        document.getElementById('admin-issue-username').value = '';
+        document.getElementById('admin-issue-password').value = '';
+        showToast(`${acc.office_name} 계정(${acc.username}) 발급 완료!`, 'success');
+    } catch (err) {
+        console.error('Issue account error', err);
+        showToast('계정 발급 요청 중 오류가 발생했습니다.', 'error');
+    }
+}
+
+async function toggleSelectedMemberVerify() {
+    const memberId = document.getElementById('admin-member-select')?.value || '';
+    if (!memberId) {
+        showToast('인증 배지를 전환할 의원을 먼저 선택해주세요.', 'error');
+        return;
+    }
+    await toggleMemberVerifyById(memberId);
+}
+
+async function toggleMemberVerifyById(memberId) {
+    try {
+        const res = await fetch('/api/admin/toggle-verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ member_id: memberId })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            showToast(data.detail || '인증 상태 전환에 실패했습니다.', 'error');
+            return;
+        }
+        syncMemberVerificationInMemory(memberId, Number(data.is_verified_office) === 1);
+        populateAdminMemberSelect(document.getElementById('admin-member-search')?.value || '');
+        loadAdminOfficeAccounts();
+        showToast(`${data.name} 의원 공식 인증: ${data.is_verified_office ? '활성화(✓)' : '해제'}`, 'info');
+    } catch (err) {
+        console.error('Toggle verify error', err);
+    }
+}
+
+async function loadAdminOfficeAccounts() {
+    const listEl = document.getElementById('admin-accounts-list');
+    if (!listEl) return;
+    try {
+        const res = await fetch('/api/admin/office-accounts', { credentials: 'same-origin' });
+        if (!res.ok) {
+            listEl.innerHTML = `<p class="text-[11px] text-rose-400">목록을 불러올 수 없습니다.</p>`;
+            return;
+        }
+        const data = await res.json();
+        const accounts = data.accounts || [];
+        if (accounts.length === 0) {
+            listEl.innerHTML = `<p class="text-[11px] text-slate-400">아직 발급된 의원실 계정이 없습니다.</p>`;
+            return;
+        }
+        listEl.innerHTML = accounts.map(a => `
+            <div class="flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/80 dark:border-slate-700/80 gap-2">
+                <div class="min-w-0">
+                    <div class="font-bold text-slate-800 dark:text-slate-100 truncate">
+                        ${escapeHtml(a.office_name)} <span class="text-sky-500 font-mono">(${escapeHtml(a.username)})</span>
+                        ${Number(a.is_verified_office) === 1 ? '<span class="ml-1 text-[10px] text-sky-500">✓인증</span>' : '<span class="ml-1 text-[10px] text-slate-400">미인증</span>'}
+                    </div>
+                    <div class="text-[10px] text-slate-400 truncate">${escapeHtml(a.member_party || '')} · 발급 ${escapeHtml(a.created_at || '')}</div>
+                </div>
+                <div class="flex items-center space-x-1 flex-shrink-0">
+                    <button type="button" onclick="toggleMemberVerifyById('${a.member_id}')" class="px-2 py-1 rounded-lg text-[10px] font-semibold bg-slate-200 dark:bg-slate-700 hover:bg-sky-500 hover:text-white transition-colors">인증전환</button>
+                    <button type="button" onclick="closeAdminIssueModal(); openModal('${a.member_id}')" class="px-2 py-1 rounded-lg text-[10px] font-semibold bg-sky-600 hover:bg-sky-500 text-white">페이지</button>
+                </div>
+            </div>
+        `).join('');
+    } catch (err) {
+        console.error('Failed to load office accounts', err);
     }
 }
 
