@@ -48,6 +48,8 @@ def init_db():
         legislation_score REAL DEFAULT 0.0,
         passed_score REAL DEFAULT 0.0,
         attendance_score REAL DEFAULT 0.0,
+        bipartisan_score REAL DEFAULT 0.0,
+        committee_score REAL DEFAULT 0.0,
         voting_score REAL DEFAULT 0.0,
         speech_score REAL DEFAULT 0.0,
         policy_score REAL DEFAULT 0.0,
@@ -69,6 +71,8 @@ def init_db():
         ("mona_cd", "TEXT"),
         ("gender", "TEXT DEFAULT 'male'"),
         ("committee_role_label", "TEXT DEFAULT '위원'"),
+        ("bipartisan_score", "REAL DEFAULT 0.0"),
+        ("committee_score", "REAL DEFAULT 0.0"),
     ]:
         if col_name not in existing_cols:
             cursor.execute(f"ALTER TABLE members ADD COLUMN {col_name} {col_def}")
@@ -95,13 +99,15 @@ def get_all_members(party: Optional[str] = None, sort_by: str = "total", search:
     conn = get_connection()
     cursor = conn.cursor()
     
-    # 정렬 컬럼 매핑 (6대 지표)
+    # 정렬 컬럼 매핑 (v3.0 6대 핵심 축 + 응원순)
     sort_column_map = {
-        "total": "total_score DESC, passed_score DESC, legislation_score DESC",
-        "legislation": "legislation_score DESC, total_score DESC",
+        "total": "total_score DESC, passed_score DESC, voting_score DESC",
         "passed": "passed_score DESC, total_score DESC",
-        "attendance": "attendance_score DESC, total_score DESC",
         "voting": "voting_score DESC, total_score DESC",
+        "legislation": "legislation_score DESC, total_score DESC",
+        "bipartisan": "bipartisan_score DESC, total_score DESC",
+        "committee": "committee_score DESC, total_score DESC",
+        "attendance": "committee_score DESC, total_score DESC",
         "speech": "speech_score DESC, total_score DESC",
         "policy": "policy_score DESC, total_score DESC",
         "cheer": "cheer_count DESC, total_score DESC"
@@ -131,10 +137,12 @@ def get_all_members(party: Optional[str] = None, sort_by: str = "total", search:
     current_rank = 1
     sort_key_attr = {
         "total": "total_score",
-        "legislation": "legislation_score",
         "passed": "passed_score",
-        "attendance": "attendance_score",
         "voting": "voting_score",
+        "legislation": "legislation_score",
+        "bipartisan": "bipartisan_score",
+        "committee": "committee_score",
+        "attendance": "committee_score",
         "speech": "speech_score",
         "policy": "policy_score",
         "cheer": "cheer_count"
@@ -182,13 +190,52 @@ def get_member_by_id(member_id: str) -> Optional[Dict[str, Any]]:
         
     member = dict(row)
     if member.get("weekly_stats_json"):
-        member["weekly_stats"] = json.loads(member["weekly_stats_json"])
+        ws = json.loads(member["weekly_stats_json"])
+        member["weekly_stats"] = ws
+    else:
+        ws = {}
+        member["weekly_stats"] = ws
     if member.get("recent_bills_json"):
         member["recent_bills"] = json.loads(member["recent_bills_json"])
     if member.get("keywords_json"):
         member["keywords"] = json.loads(member["keywords_json"])
     else:
         member["keywords"] = ["#국회의원", "#입법활동", "#민생우선"]
+
+    # 14대 내부 공공 팩트 지표 요약 시트
+    vb = ws.get("vote_breakdown") or {}
+    member["fact_sheet_14"] = {
+        "bills_proposed": int(ws.get("bills_proposed", 0)),
+        "passed_original": int(ws.get("passed_original", 0)),
+        "passed_amended": int(ws.get("passed_amended", 0)),
+        "alt_incorporated": int(ws.get("alt_incorporated", ws.get("subcommittee_passed", 0))),
+        "passage_efficiency": float(ws.get("passage_efficiency", 0.0)),
+        "bipartisan_rate": float(ws.get("bipartisan_rate", 0.0)),
+        "bipartisan_cosponsor_share": float(ws.get("bipartisan_cosponsor_share", 0.0)),
+        "avg_cosponsors": float(ws.get("avg_cosponsors", 0.0)),
+        "cosponsor_participations": int(ws.get("cosponsor_participations", 0)),
+        "policy_diversity": int(ws.get("policy_diversity", 0)),
+        "policy_committees": ws.get("policy_committees", []),
+        "voting_rate": float(ws.get("voting_rate", member.get("voting_rate", 0.0))),
+        "votes_participated": int(ws.get("votes_participated", 0)),
+        "votes_eligible": int(ws.get("votes_eligible", 0)),
+        "active_vote_ratio": float(ws.get("active_vote_ratio", member.get("voting_rate", 0.0))),
+        "vote_breakdown": {
+            "찬성": int(vb.get("찬성", 0)),
+            "반대": int(vb.get("반대", 0)),
+            "기권": int(vb.get("기권", 0)),
+            "불참": int(vb.get("불참", 0)),
+        },
+        "committee_count": int(ws.get("committee_count", 1)),
+        "committees_list": ws.get("committees_list", [member.get("committee", "")]),
+        "has_special_duty": bool(ws.get("has_special_duty", False)),
+        "special_duties": ws.get("special_duties", []),
+        "committee_role_label": member.get("committee_role_label", "위원"),
+        "speech_count": int(member.get("speech_count", ws.get("committee_speech_count", 0))),
+        "seminar_hosted": bool(ws.get("seminar_hosted", False)),
+        "interpellation_count": int(ws.get("interpellation_count", 0)),
+        "media_mentions": int(member.get("media_mentions", 0)),
+    }
         
     # 전체 순위 계산
     cursor.execute("SELECT COUNT(*) + 1 AS rank FROM members WHERE total_score > ?", (member["total_score"],))

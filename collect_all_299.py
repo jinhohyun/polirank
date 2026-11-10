@@ -942,6 +942,11 @@ def main():
             print(f"[*] 기존 32명 원본 데이터를 {SEED_BACKUP_PATH}에 백업했습니다.")
 
     dataset = build_all_members_dataset()
+    try:
+        from enrich_extra_metrics import enrich_dataset
+        dataset = enrich_dataset(dataset)
+    except Exception as e:
+        print(f"[!] 보강 지표 산출 중 경고: {e}")
 
     with open(SEED_ALL_PATH, "w", encoding="utf-8") as f:
         json.dump(dataset, f, ensure_ascii=False, indent=2)

@@ -29,15 +29,15 @@ const searchInput = document.getElementById('member-search');
 const detailModal = document.getElementById('detail-modal');
 const toastContainer = document.getElementById('toast-container');
 
-// Sort Labels
+// Sort Labels (v3.0 6 Axes)
 const SORT_LABELS = {
-    total: '종합 랭킹 기준 정렬 중 (6대 지표 가중치 종합 순)',
-    legislation: '📜 입법 실적 기준 정렬 중 (대표/공동발의 순)',
-    passed: '🎯 법안 가결 성과 기준 정렬 중 (본회의 가결 건수 순)',
-    attendance: '⏰ 의정 출석 성실도 기준 정렬 중 (본회의/상임위 출석률 순)',
-    voting: '🗳️ 본회의 안건 전자표결 참여율 순 정렬 중 (공공데이터 팩트)',
-    speech: '🎙️ 상임위 회의록 속기록 발언력 순 정렬 중',
-    policy: '💡 정책 세미나/공청회 주최 순 정렬 중',
+    total: '종합 랭킹 기준 정렬 중 (입법품질 30% · 표결 20% · 발의 15% · 협치 15% · 직무 12% · 소통 8%)',
+    passed: '🎯 입법 성과·품질 순 정렬 중 (가결/대안반영 실적 70% + 입법 타율 30%)',
+    voting: '🗳️ 본회의 표결·참여 순 정렬 중 (전자표결 참여율 + 찬·반 적극 의사표시)',
+    legislation: '📜 입법 발의·협업 순 정렬 중 (대표발의 총건수 + 동료 법안 공동발의 참여수)',
+    bipartisan: '🤝 초당적 협치·연대 순 정렬 중 (타 정당 공동발의 비율 + 평균 설득 인원)',
+    committee: '⚖️ 위원회 직무·성실 순 정렬 중 (겸임 상임위·특위 참여 + 직책 + 성실도)',
+    policy: '🎙️ 정책 소통·다양성 순 정렬 중 (발의 분야 다양성 + 상임위 발언 + 정책 활동)',
     cheer: '💖 시민 실시간 응원순 정렬 중'
 };
 
@@ -169,8 +169,14 @@ function setupEventListeners() {
 
     // Modal ESC Key Close
     window.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && !detailModal.classList.contains('hidden')) {
-            closeModal();
+        if (e.key === 'Escape') {
+            if (detailModal && !detailModal.classList.contains('hidden')) {
+                closeModal();
+            }
+            const methModal = document.getElementById('methodology-modal');
+            if (methModal && !methModal.classList.contains('hidden')) {
+                closeMethodologyModal();
+            }
         }
     });
 }
@@ -239,10 +245,11 @@ function applyFiltersAndRender() {
 
 // Helper: Get metric value for sorting & tied ranking
 function getMemberStatValue(member, sortKey) {
-    if (sortKey === 'legislation') return member.legislation_score || 0;
     if (sortKey === 'passed') return member.passed_score || 0;
-    if (sortKey === 'attendance') return member.attendance_score || 0;
-    if (sortKey === 'voting') return member.voting_rate || 0;
+    if (sortKey === 'voting') return member.voting_score || 0;
+    if (sortKey === 'legislation') return member.legislation_score || 0;
+    if (sortKey === 'bipartisan') return member.bipartisan_score || 0;
+    if (sortKey === 'committee' || sortKey === 'attendance') return member.committee_score ?? member.attendance_score ?? 0;
     if (sortKey === 'speech') return member.speech_count || 0;
     if (sortKey === 'policy') return member.policy_score || 0;
     if (sortKey === 'cheer') return member.cheer_count || 0;
@@ -399,28 +406,28 @@ function createMemberCardElement(member, displayRank, rankText, isTied) {
     let primaryStatLabel = '종합 PoliScore';
     let primaryStatVal = member.total_score;
     let unit = '점';
-    if (currentSort === 'legislation') {
-        primaryStatLabel = '입법 실적';
-        primaryStatVal = member.legislation_score;
-    } else if (currentSort === 'passed') {
-        primaryStatLabel = '법안 가결 성과';
+    const commScore = member.committee_score ?? member.attendance_score ?? 0;
+    const bipScore = member.bipartisan_score ?? 0;
+    if (currentSort === 'passed') {
+        primaryStatLabel = '🎯 입법 성과·품질';
         primaryStatVal = member.passed_score;
-    } else if (currentSort === 'attendance') {
-        primaryStatLabel = '의정 출석률';
-        primaryStatVal = member.attendance_score;
     } else if (currentSort === 'voting') {
-        primaryStatLabel = '본회의 표결 참여율';
-        primaryStatVal = member.voting_rate;
-        unit = '%';
-    } else if (currentSort === 'speech') {
-        primaryStatLabel = '상임위 발언 횟수';
-        primaryStatVal = member.speech_count;
-        unit = '회';
+        primaryStatLabel = '🗳️ 본회의 표결·참여';
+        primaryStatVal = member.voting_score;
+    } else if (currentSort === 'legislation') {
+        primaryStatLabel = '📜 입법 발의·협업';
+        primaryStatVal = member.legislation_score;
+    } else if (currentSort === 'bipartisan') {
+        primaryStatLabel = '🤝 초당적 협치·연대';
+        primaryStatVal = bipScore;
+    } else if (currentSort === 'committee' || currentSort === 'attendance') {
+        primaryStatLabel = '⚖️ 위원회 직무·성실';
+        primaryStatVal = commScore;
     } else if (currentSort === 'policy') {
-        primaryStatLabel = '정책 세미나 활동';
+        primaryStatLabel = '🎙️ 정책 소통·다양성';
         primaryStatVal = member.policy_score;
     } else if (currentSort === 'cheer') {
-        primaryStatLabel = '시민 실시간 응원';
+        primaryStatLabel = '💖 시민 실시간 응원';
         primaryStatVal = member.cheer_count;
         unit = '개';
     }
@@ -500,36 +507,42 @@ function createMemberCardElement(member, displayRank, rankText, isTied) {
             </div>
         </div>
 
-        <!-- 6-Attribute Micro Progress Bars -->
+        <!-- 6-Attribute Micro Progress Bars (v3.0 6 Core Axes) -->
         <div class="space-y-1 text-[10px] mb-3">
             <div class="flex items-center justify-between">
-                <span class="text-slate-500">📜 입법 (${member.legislation_score})</span>
-                <div class="w-20 h-1 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                    <div class="h-full bg-sky-500 rounded-full" style="width: ${member.legislation_score}%"></div>
-                </div>
-            </div>
-            <div class="flex items-center justify-between">
-                <span class="text-slate-500">🎯 가결 (${member.passed_score})</span>
+                <span class="text-slate-500">🎯 입법품질 (${member.passed_score})</span>
                 <div class="w-20 h-1 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
                     <div class="h-full bg-emerald-500 rounded-full" style="width: ${member.passed_score}%"></div>
                 </div>
             </div>
             <div class="flex items-center justify-between">
-                <span class="text-slate-500">⏰ 출석 (${member.attendance_score})</span>
+                <span class="text-slate-500">🗳️ 표결참여 (${member.voting_rate}%)</span>
                 <div class="w-20 h-1 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                    <div class="h-full bg-amber-500 rounded-full" style="width: ${member.attendance_score}%"></div>
+                    <div class="h-full bg-teal-500 rounded-full" style="width: ${member.voting_score}%"></div>
                 </div>
             </div>
             <div class="flex items-center justify-between">
-                <span class="text-slate-500">🗳️ 표결 (${member.voting_rate}%)</span>
+                <span class="text-slate-500">📜 입법발의 (${member.legislation_score})</span>
                 <div class="w-20 h-1 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                    <div class="h-full bg-teal-500 rounded-full" style="width: ${member.voting_rate}%"></div>
+                    <div class="h-full bg-sky-500 rounded-full" style="width: ${member.legislation_score}%"></div>
                 </div>
             </div>
             <div class="flex items-center justify-between">
-                <span class="text-slate-500">🎙️ 발언 (${member.speech_count}회)</span>
+                <span class="text-slate-500">🤝 초당협치 (${bipScore})</span>
                 <div class="w-20 h-1 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                    <div class="h-full bg-fuchsia-500 rounded-full" style="width: ${member.speech_score}%"></div>
+                    <div class="h-full bg-indigo-500 rounded-full" style="width: ${bipScore}%"></div>
+                </div>
+            </div>
+            <div class="flex items-center justify-between">
+                <span class="text-slate-500">⚖️ 위원직무 (${commScore})</span>
+                <div class="w-20 h-1 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                    <div class="h-full bg-amber-500 rounded-full" style="width: ${commScore}%"></div>
+                </div>
+            </div>
+            <div class="flex items-center justify-between">
+                <span class="text-slate-500">🎙️ 정책소통 (${member.policy_score})</span>
+                <div class="w-20 h-1 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                    <div class="h-full bg-purple-500 rounded-full" style="width: ${member.policy_score}%"></div>
                 </div>
             </div>
         </div>
@@ -657,24 +670,29 @@ async function openModal(memberId) {
 
         renderModalAvatar();
 
-        // 6-Stat Bars
-        document.getElementById('stat-leg-val').textContent = `${member.legislation_score}점`;
-        document.getElementById('stat-leg-bar').style.width = `${member.legislation_score}%`;
-        
+        // 6-Stat Bars (v3.0 6 Axes)
+        const commScore = member.committee_score ?? member.attendance_score ?? 0;
+        const bipScore = member.bipartisan_score ?? 0;
+
         document.getElementById('stat-pass-val').textContent = `${member.passed_score}점`;
         document.getElementById('stat-pass-bar').style.width = `${member.passed_score}%`;
-        
-        document.getElementById('stat-att-val').textContent = `${member.attendance_score}점`;
-        document.getElementById('stat-att-bar').style.width = `${member.attendance_score}%`;
-        
+
         document.getElementById('stat-vot-val').textContent = `${member.voting_rate}% (${member.voting_score}점)`;
-        document.getElementById('stat-vot-bar').style.width = `${member.voting_rate}%`;
-        
-        document.getElementById('stat-spk-val').textContent = `${member.speech_count}회 (${member.speech_score}점)`;
-        document.getElementById('stat-spk-bar').style.width = `${member.speech_score}%`;
-        
+        document.getElementById('stat-vot-bar').style.width = `${member.voting_score}%`;
+
+        document.getElementById('stat-leg-val').textContent = `${member.legislation_score}점`;
+        document.getElementById('stat-leg-bar').style.width = `${member.legislation_score}%`;
+
+        document.getElementById('stat-bip-val').textContent = `${bipScore}점`;
+        document.getElementById('stat-bip-bar').style.width = `${bipScore}%`;
+
+        document.getElementById('stat-comm-val').textContent = `${commScore}점`;
+        document.getElementById('stat-comm-bar').style.width = `${commScore}%`;
+
         document.getElementById('stat-pol-val').textContent = `${member.policy_score}점`;
         document.getElementById('stat-pol-bar').style.width = `${member.policy_score}%`;
+
+        renderModalFactSheet14(member);
 
         document.getElementById('modal-donation-account').textContent = member.donation_account || '선관위 정치후원금센터 참조';
         document.getElementById('modal-cheer-count').textContent = member.cheer_count;
@@ -768,6 +786,106 @@ function renderModalBills(bills) {
     }).join('');
 }
 
+// Toggle 14-Metric Fact Sheet Accordion
+function toggleFactSheet() {
+    const body = document.getElementById('modal-fact-sheet-body');
+    const chevron = document.getElementById('fact-sheet-chevron');
+    if (!body) return;
+    const isHidden = body.classList.toggle('hidden');
+    if (chevron) {
+        chevron.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+    }
+}
+
+// Render 14 Detailed Public Fact Metrics in Modal
+function renderModalFactSheet14(member) {
+    const grid = document.getElementById('modal-fact-sheet-grid');
+    const commTags = document.getElementById('modal-committees-tags');
+    if (!grid) return;
+
+    const fs = member.fact_sheet_14 || {};
+    const ws = member.weekly_stats || {};
+    const vb = fs.vote_breakdown || ws.vote_breakdown || {};
+
+    const passedOrig = fs.passed_original ?? ws.passed_original ?? 0;
+    const passedAmend = fs.passed_amended ?? ws.passed_amended ?? 0;
+    const altInc = fs.alt_incorporated ?? ws.alt_incorporated ?? ws.subcommittee_passed ?? 0;
+    const billsProp = fs.bills_proposed ?? ws.bills_proposed ?? 0;
+    const eff = fs.passage_efficiency ?? ws.passage_efficiency ?? 0;
+    const bipRate = fs.bipartisan_rate ?? ws.bipartisan_rate ?? 0;
+    const bipShare = fs.bipartisan_cosponsor_share ?? ws.bipartisan_cosponsor_share ?? 0;
+    const avgCosp = fs.avg_cosponsors ?? ws.avg_cosponsors ?? 0;
+    const cospPart = fs.cosponsor_participations ?? ws.cosponsor_participations ?? 0;
+    const polDiv = fs.policy_diversity ?? ws.policy_diversity ?? 0;
+    const vRate = fs.voting_rate ?? member.voting_rate ?? 0;
+    const vPart = fs.votes_participated ?? ws.votes_participated ?? 0;
+    const vElig = fs.votes_eligible ?? ws.votes_eligible ?? 0;
+    const actVote = fs.active_vote_ratio ?? ws.active_vote_ratio ?? vRate;
+    const yesCnt = vb['찬성'] || 0;
+    const noCnt = vb['반대'] || 0;
+    const absCnt = vb['기권'] || 0;
+    const outCnt = vb['불참'] || 0;
+    const commCnt = fs.committee_count ?? ws.committee_count ?? 1;
+    const hasSpec = fs.has_special_duty ?? ws.has_special_duty ?? false;
+    const roleLabel = fs.committee_role_label || member.committee_role_label || '위원';
+    const spkCnt = fs.speech_count ?? member.speech_count ?? 0;
+    const interpCnt = fs.interpellation_count ?? ws.interpellation_count ?? 0;
+    const mentions = fs.media_mentions ?? member.media_mentions ?? 0;
+
+    const items = [
+        { icon: '📜', label: '1. 대표발의 총 건수', val: `${billsProp}건`, sub: '22대 누적 실측' },
+        { icon: '🏛️', label: '2. 원안가결', val: `${passedOrig}건`, sub: '최고 가결 등급(×3.0)' },
+        { icon: '✏️', label: '3. 수정가결', val: `${passedAmend}건`, sub: '본회의 통과(×2.5)' },
+        { icon: '🔀', label: '4. 대안반영폐기', val: `${altInc}건`, sub: '위원회 대안 반영(×1.0)' },
+        { icon: '🎯', label: '5. 입법 타율·효율', val: `${eff}%`, sub: '최소 5건 보정 가결효율' },
+        { icon: '🤝', label: '6. 타 정당 협치율', val: `${bipRate}%`, sub: `타당의원 비중 ${bipShare}%` },
+        { icon: '👥', label: '7. 평균 공동발의', val: `${avgCosp}명`, sub: '법안당 설득 인원' },
+        { icon: '🔗', label: '8. 동료법안 공동참여', val: `${cospPart}회`, sub: '3,378+건 풀 기준' },
+        { icon: '🌐', label: '9. 입법 분야 다양성', val: `${polDiv}개 분야`, sub: '발의 소관 상임위 수' },
+        { icon: '🗳️', label: '10. 본회의 표결률', val: `${vRate}%`, sub: `${vPart}/${vElig}건 참여` },
+        { icon: '✅', label: '11. 찬·반 적극표결', val: `${actVote}%`, sub: `찬${yesCnt}·반${noCnt}·기${absCnt}·불${outCnt}` },
+        { icon: '⚖️', label: '12. 겸임 위원회 수', val: `${commCnt}개`, sub: hasSpec ? '핵심 특위·겸임 참여' : '본 상임위 전담' },
+        { icon: '🎙️', label: '13. 직책 · 상임위발언', val: `${roleLabel} · ${spkCnt}회`, sub: '의정 활동 발언 지표' },
+        { icon: '💡', label: '14. 정책질의 · 언론', val: `${mentions.toLocaleString()}회`, sub: `대정부질의/세미나 ${interpCnt}건` },
+    ];
+
+    grid.innerHTML = items.map(it => `
+        <div class="p-2.5 rounded-xl bg-white dark:bg-slate-900/70 border border-slate-200/80 dark:border-slate-700/80 space-y-0.5">
+            <div class="text-[10px] text-slate-400 font-semibold truncate">${it.icon} ${it.label}</div>
+            <div class="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-100">${it.val}</div>
+            <div class="text-[10px] text-slate-400 truncate">${it.sub}</div>
+        </div>
+    `).join('');
+
+    if (commTags) {
+        const commsList = fs.committees_list || ws.committees_list || [member.committee];
+        const specSet = new Set(fs.special_duties || ws.special_duties || []);
+        commTags.innerHTML = `<span class="text-slate-400 font-semibold mr-1">소속 위원회:</span>` + commsList.map(c => {
+            const isSpec = specSet.has(c);
+            return `<span class="px-2 py-0.5 rounded-md ${isSpec ? 'bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30 font-bold' : 'bg-slate-200/80 dark:bg-slate-700/80 text-slate-600 dark:text-slate-300'}">${c}${isSpec ? ' ★' : ''}</span>`;
+        }).join('');
+    }
+}
+
+// Open & Close Methodology Modal
+function openMethodologyModal() {
+    const m = document.getElementById('methodology-modal');
+    if (m) {
+        m.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+    }
+}
+
+function closeMethodologyModal() {
+    const m = document.getElementById('methodology-modal');
+    if (m) {
+        m.classList.add('hidden');
+        if (!detailModal || detailModal.classList.contains('hidden')) {
+            document.body.style.overflow = 'auto';
+        }
+    }
+}
+
 // Render 6-Axis Hexagon Radar Chart with Chart.js
 function renderRadarChart(member) {
     const canvas = document.getElementById('modalRadarChart');
@@ -785,15 +903,15 @@ function renderRadarChart(member) {
     radarChartInstance = new Chart(ctx, {
         type: 'radar',
         data: {
-            labels: ['입법 실적', '법안 가결', '의정 출석', '표결 참여율', '상임위 발언', '정책 세미나'],
+            labels: ['입법품질(30%)', '본회의표결(20%)', '입법발의(15%)', '초당적협치(15%)', '위원회직무(12%)', '정책소통(8%)'],
             datasets: [{
-                label: `${member.name} 의원 6대 능력치`,
+                label: `${member.name} 의원 6대 핵심 축`,
                 data: [
-                    member.legislation_score,
                     member.passed_score,
-                    member.attendance_score,
                     member.voting_score,
-                    member.speech_score,
+                    member.legislation_score,
+                    member.bipartisan_score ?? 0,
+                    member.committee_score ?? member.attendance_score ?? 0,
                     member.policy_score
                 ],
                 backgroundColor: `${member.party_color}33`,

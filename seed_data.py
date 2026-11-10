@@ -367,10 +367,10 @@ def seed():
                 committee, committee_role, committee_role_label, terms, gender, age,
                 photo_url, official_photo_url,
                 bio, quote, keywords_json, media_mentions, donation_account, cheer_count,
-                legislation_score, passed_score, attendance_score, voting_score, speech_score,
-                policy_score, voting_rate, speech_count, total_score, tier, tier_title,
-                weekly_stats_json, recent_bills_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                legislation_score, passed_score, attendance_score, bipartisan_score, committee_score,
+                voting_score, speech_score, policy_score, voting_rate, speech_count,
+                total_score, tier, tier_title, weekly_stats_json, recent_bills_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             m["id"],
             mona_cd,
@@ -397,6 +397,8 @@ def seed():
             scores["legislation_score"],
             scores["passed_score"],
             scores["attendance_score"],
+            scores["bipartisan_score"],
+            scores["committee_score"],
             scores["voting_score"],
             scores["speech_score"],
             scores["policy_score"],

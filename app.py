@@ -24,11 +24,12 @@ from database import (
     get_summary_stats
 )
 from avatar_generator import generate_caricature_svg
+from scoring import SCORING_METHODOLOGY
 
 app = FastAPI(
     title="PoliRank API",
-    description="제22대 국회의원 299인 객관적 6대 정량 지표 랭킹 & 커뮤니티 풀버전 API",
-    version="2.0.0"
+    description="제22대 국회의원 299인 6대 핵심 축 · 14대 실제 공공 팩트 지표 랭킹 플랫폼 API",
+    version="3.0.0"
 )
 
 # CORS 설정
@@ -63,9 +64,11 @@ def startup_event():
     try:
         c.execute("SELECT COUNT(*) as cnt FROM members")
         cnt = c.fetchone()["cnt"]
+        c.execute("SELECT COUNT(*) as v3_cnt FROM members WHERE committee_score > 0")
+        v3_cnt = c.fetchone()["v3_cnt"]
         has_all_seed = os.path.exists(os.path.join(CURRENT_DIR, "seed_data_all.json"))
-        if cnt == 0 or (cnt < 200 and has_all_seed):
-            print(f"[*] Database has {cnt} members. Seeding full 299-member data...")
+        if cnt == 0 or (has_all_seed and (cnt < 200 or v3_cnt == 0)):
+            print(f"[*] Database requires v3.0 seeding (total={cnt}, v3={v3_cnt}). Seeding 299-member data...")
             seed()
     except Exception as e:
         print("[!] Startup check failed, running seed:", e)
@@ -86,13 +89,18 @@ def get_stats():
     """상단 헤더 라이브 통계 지표"""
     return get_summary_stats()
 
+@app.get("/api/scoring/methodology")
+def get_methodology():
+    """v3.0 6대 핵심 축 및 가중치 설계 원칙"""
+    return SCORING_METHODOLOGY
+
 @app.get("/api/members")
 def list_members(
     party: Optional[str] = Query(None, description="정당 필터 (all, 더불어민주당, 국민의힘 등)"),
-    sort_by: str = Query("total", description="정렬 기준 (total, legislation, passed, attendance, voting, speech, policy, cheer)"),
+    sort_by: str = Query("total", description="정렬 기준 (total, passed, voting, legislation, bipartisan, committee, policy, cheer)"),
     search: Optional[str] = Query(None, description="이름, 지역구, 상임위, 어록 검색")
 ):
-    """국회의원 랭킹 목록 조회 (객관적 6대 스탯 순위)"""
+    """국회의원 랭킹 목록 조회 (v3.0 6대 핵심 축 & 14대 지표)"""
     members = get_all_members(party=party, sort_by=sort_by, search=search)
     for m in members:
         m["avatar_url"] = f"/api/members/{m['id']}/avatar.svg"
@@ -106,24 +114,31 @@ def list_members(
 
 @app.get("/api/members/{member_id}")
 def get_member(member_id: str):
-    """국회의원 상세 정보 및 6각 레이더 차트 지표 조회"""
+    """국회의원 상세 정보, 6각 레이더 차트 및 14대 세부 팩트 시트 조회"""
     member = get_member_by_id(member_id)
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
         
     member["avatar_url"] = f"/api/members/{member['id']}/avatar.svg"
     
-    # 6대 핵심 객관 지표 6각 레이더 차트 데이터
+    # v3.0 6대 핵심 축 6각 레이더 차트 데이터 (메이저 -> 마이너 순)
     member["radar_chart"] = {
-        "labels": ["입법 실적", "법안 가결", "의정 출석", "표결 참여", "상임위 발언", "정책 세미나"],
+        "labels": [
+            "입법품질(30%)",
+            "본회의표결(20%)",
+            "입법발의(15%)",
+            "초당적협치(15%)",
+            "위원회직무(12%)",
+            "정책소통(8%)",
+        ],
         "datasets": [{
-            "label": f"{member['name']} 의원 6대 능력치",
+            "label": f"{member['name']} 의원 6대 핵심 축",
             "data": [
-                member["legislation_score"],
                 member["passed_score"],
-                member["attendance_score"],
                 member["voting_score"],
-                member["speech_score"],
+                member["legislation_score"],
+                member.get("bipartisan_score", 0.0),
+                member.get("committee_score", member["attendance_score"]),
                 member["policy_score"]
             ],
             "backgroundColor": f"{member['party_color']}33",
