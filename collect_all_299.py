@@ -947,6 +947,11 @@ def main():
         dataset = enrich_dataset(dataset)
     except Exception as e:
         print(f"[!] 보강 지표 산출 중 경고: {e}")
+    try:
+        from collect_news_buzz import enrich_news_buzz
+        dataset = enrich_news_buzz(dataset)
+    except Exception as e:
+        print(f"[!] 뉴스 화제성 지표 수집 중 경고: {e}")
 
     with open(SEED_ALL_PATH, "w", encoding="utf-8") as f:
         json.dump(dataset, f, ensure_ascii=False, indent=2)

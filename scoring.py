@@ -18,7 +18,7 @@ PoliRank - 국회의원 객관적 능력치 산출 및 랭킹 스코어링 엔�
    - 발의 법안 소관 분야 다양성 policy_diversity (45%) + 상임위 발언력 (30%) + 정책 세미나·대정부질문·언론 주목도 (25%)
 """
 import math
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 
 SCORING_METHODOLOGY = {
@@ -207,4 +207,86 @@ def calculate_member_scores(member_data: Dict[str, Any]) -> Dict[str, Any]:
         "total_score": total_score,
         "tier": tier,
         "tier_title": tier_title,
+    }
+
+
+def calculate_fun_metrics(
+    member_data: Dict[str, Any],
+    total_score: Optional[float] = None,
+    cheer_count: Optional[int] = None,
+    comment_stats: Optional[Dict[str, int]] = None,
+) -> Dict[str, float]:
+    """
+    종합 의정 점수(total_score)와 100% 독립된 재미·화제성 지표를 산출합니다.
+    (절대 본질 의정 점수에 합산되거나 영향을 주지 않습니다.)
+
+    - fandom_score (0~100): 인기·팬덤 지수 (실시간 응원 + 긍정 댓글 + 최근 30일 뉴스 + 누적 화제성)
+    - controversy_score (0~100°C): 논란·핫이슈 온도 (쟁점 키워드 뉴스 비중·건수 + 반대/기권/불참 성향 + 분발 댓글)
+    - hidden_gem_score (0~100): 흙속의 진주 지수 (높은 의정 실력 대비 낮은 언론 노출도)
+    """
+    ws = member_data.get("weekly_stats") or {}
+    c_stats = comment_stats or {}
+
+    resolved_total = float(total_score if total_score is not None else member_data.get("total_score", 65.0))
+    resolved_cheer = int(cheer_count if cheer_count is not None else member_data.get("cheer_count", 100))
+
+    tot_comments = sum(int(v) for v in c_stats.values())
+    cheer_comments = int(c_stats.get("cheer", 0))
+    critique_comments = int(c_stats.get("critique", 0))
+
+    news_cnt = int(member_data.get("news_30d_count", ws.get("news_30d_count", 15)))
+    cont_cnt = int(member_data.get("controversy_news_count", ws.get("controversy_news_count", 0)))
+    media_mentions = int(member_data.get("media_mentions", 1000))
+
+    vb = ws.get("vote_breakdown") or {}
+    v_yes = int(vb.get("찬성", 0))
+    v_no = int(vb.get("반대", 0))
+    v_abs = int(vb.get("기권", 0))
+    v_rate = float(ws.get("voting_rate", member_data.get("voting_rate", 80.0)))
+
+    # 1. 🔥 인기·팬덤 지수 (fandom_score, 0~100)
+    news_buzz = min(100.0, (math.log1p(news_cnt) / math.log1p(75.0)) * 100.0)
+    media_buzz = min(100.0, (math.log1p(media_mentions) / math.log1p(4800.0)) * 100.0)
+    cheer_norm = min(100.0, (math.log1p(resolved_cheer) / math.log1p(400.0)) * 100.0)
+    cheer_comm_norm = ((cheer_comments + 2.0) / (tot_comments + 4.0)) * 100.0
+    fandom_score = min(
+        100.0,
+        max(0.0, (news_buzz * 0.42) + (media_buzz * 0.25) + (cheer_norm * 0.23) + (cheer_comm_norm * 0.10)),
+    )
+
+    # 2. ⚡ 논란·핫이슈 온도 (controversy_score, 0~100°C)
+    cont_cnt_norm = min(100.0, (math.log1p(cont_cnt) / math.log1p(25.0)) * 100.0)
+    cont_ratio = cont_cnt / max(4.0, float(news_cnt))
+    cont_ratio_norm = min(100.0, ((min(cont_ratio, 0.70) / 0.70) ** 0.70) * 100.0) if cont_cnt > 0 else 0.0
+    opp_ratio = ((v_no + v_abs) / max(1, v_yes + v_no + v_abs)) * 100.0
+    absent_heat = max(0.0, (55.0 - v_rate) * 0.7) if v_rate < 55.0 else 0.0
+    vote_heat = min(100.0, (opp_ratio * 1.4) + absent_heat)
+    crit_heat = (critique_comments / (tot_comments + 3.0)) * 100.0
+    controversy_score = min(
+        100.0,
+        max(0.0, (cont_cnt_norm * 0.50) + (cont_ratio_norm * 0.30) + (vote_heat * 0.10) + (crit_heat * 0.10)),
+    )
+
+    # 3. 💎 흙속의 진주 지수 (hidden_gem_score, 0~100)
+    skill_norm = 0.0 if resolved_total < 60.0 else min(100.0, ((resolved_total - 55.0) / 36.0) * 100.0)
+    quiet_news = max(
+        0.0,
+        min(100.0, (1.0 - (math.log1p(news_cnt) - math.log1p(5.0)) / (math.log1p(45.0) - math.log1p(5.0))) * 100.0),
+    )
+    quiet_media = max(
+        0.0,
+        min(100.0, (1.0 - (math.log1p(media_mentions) - math.log1p(500.0)) / (math.log1p(4500.0) - math.log1p(500.0))) * 100.0),
+    )
+    quiet_norm = (quiet_news * 0.75) + (quiet_media * 0.25)
+    gem_raw = ((skill_norm * 0.52) + (quiet_norm * 0.48)) * 1.15
+    if resolved_total < 70.0:
+        gem_raw *= 0.65
+    if news_cnt >= 25:
+        gem_raw *= 0.85
+    hidden_gem_score = min(100.0, max(0.0, gem_raw))
+
+    return {
+        "fandom_score": round(fandom_score, 1),
+        "controversy_score": round(controversy_score, 1),
+        "hidden_gem_score": round(hidden_gem_score, 1),
     }

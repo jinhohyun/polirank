@@ -5,8 +5,9 @@ import hashlib
 import os
 import json
 import random
-from database import init_db, get_connection
-from scoring import calculate_member_scores
+from datetime import datetime, timezone, timedelta
+from database import init_db, get_connection, set_metadata
+from scoring import calculate_member_scores, calculate_fun_metrics
 
 ALL_SEED = os.path.abspath(os.path.join(os.path.dirname(__file__), "seed_data_all.json"))
 LOCAL_SEED = os.path.abspath(os.path.join(os.path.dirname(__file__), "seed_data.json"))
@@ -282,35 +283,60 @@ SAMPLE_COMMENTS = [
     ("새싹 정치학도", "cheer", "질의 내용의 깊이가 남다르네요. 계속해서 날카로운 질의 기대합니다.")
 ]
 
-def seed():
-    print(f"[*] Initializing PoliRank DB with 6 Key Metrics & Fun Factors...")
+def seed(preserve_user_data: bool = False):
+    print(f"[*] Initializing PoliRank v3.1 DB (preserve_user_data={preserve_user_data})...")
     init_db()
-    
+
     if not os.path.exists(SEED_JSON_PATH):
         print(f"[!] Seed json not found at {SEED_JSON_PATH}")
         return
-        
+
     with open(SEED_JSON_PATH, "r", encoding="utf-8") as f:
         data = json.load(f)
-        
+
     members = data.get("members", [])
     print(f"[*] Found {len(members)} members in seed data.")
-    
-    conn = get_connection()
-    cursor = conn.cursor()
-    
-    # 테이블 리프레시
-    cursor.execute("DROP TABLE IF EXISTS members")
-    cursor.execute("DROP TABLE IF EXISTS comments")
-    conn.commit()
-    conn.close()
-    
-    init_db()
-    conn = get_connection()
-    cursor = conn.cursor()
-    
+
+    existing_cheers = {}
+    existing_comment_counts = {}
+    existing_comment_stances = {}
+
+    if preserve_user_data:
+        conn_prev = get_connection()
+        cur_prev = conn_prev.cursor()
+        try:
+            for r in cur_prev.execute("SELECT id, cheer_count FROM members").fetchall():
+                existing_cheers[r["id"]] = r["cheer_count"]
+            for r in cur_prev.execute("SELECT member_id, stance, COUNT(*) as cnt FROM comments GROUP BY member_id, stance").fetchall():
+                mid = r["member_id"]
+                existing_comment_stances.setdefault(mid, {})[r["stance"]] = r["cnt"]
+                existing_comment_counts[mid] = existing_comment_counts.get(mid, 0) + r["cnt"]
+        except Exception as e:
+            print("[!] Warning reading existing user data:", e)
+        finally:
+            conn_prev.close()
+
+        conn = get_connection()
+        cursor = conn.cursor()
+        # 비현역이 된 의원 정리, 현역은 upsert
+        active_ids = [m["id"] for m in members]
+        if active_ids:
+            placeholders = ",".join("?" for _ in active_ids)
+            cursor.execute(f"DELETE FROM members WHERE id NOT IN ({placeholders})", active_ids)
+    else:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DROP TABLE IF EXISTS members")
+        cursor.execute("DROP TABLE IF EXISTS comments")
+        conn.commit()
+        conn.close()
+
+        init_db()
+        conn = get_connection()
+        cursor = conn.cursor()
+
     random.seed(42)
-    
+
     for m in members:
         name = m["name"]
         mona_cd = m.get("mona_cd", "")
@@ -345,8 +371,9 @@ def seed():
             weekly_stats["committee_speech_count"] = extra["committee_speech_count"]
 
         m["weekly_stats"] = weekly_stats
+        m["media_mentions"] = media_mentions
 
-        # 6대 지표 점수 계산
+        # 본질 6대 축 점수 계산 (재미 지표와 완전 격리)
         scores = calculate_member_scores(m)
 
         # 결정론적 공식 후원계좌 (MD5 기반)
@@ -356,21 +383,55 @@ def seed():
         acc_num = f"{301 + (digest_int % 90):03d}-{1000 + (digest_int % 8999):04d}-{1000 + ((digest_int >> 8) % 8999):04d}-{11 + (digest_int % 88):02d}"
         donation_account = f"{bank} {acc_num} (국회의원 {m['name']} 후원회)"
 
-        # 초기 실시간 응원수
+        # 유저 응원 보존 또는 초기 응원수 산출
         base_cheer = int(scores["total_score"] * 1.5) + 15 + (digest_int % 65)
+        cheer_count = max(existing_cheers.get(m["id"], 0), base_cheer) if preserve_user_data else base_cheer
         recent_bills = weekly_stats.get("recent_bills", [])
         role_label = m.get("committee_role_label") or ("위원장" if m.get("committee_role") == "chair" else ("간사" if m.get("committee_role") == "secretary" else "위원"))
 
+        # 댓글 시딩 (신규 의원이거나 preserve_user_data=False인 경우만)
+        if not preserve_user_data or existing_comment_counts.get(m["id"], 0) == 0:
+            selected_comments = random.sample(SAMPLE_COMMENTS, k=random.randint(2, 3))
+            c_stances = {}
+            for author, stance, content in selected_comments:
+                c_stances[stance] = c_stances.get(stance, 0) + 1
+                cursor.execute("""
+                    INSERT INTO comments (member_id, author, stance, content, created_at, likes)
+                    VALUES (?, ?, ?, ?, datetime('now', ?), ?)
+                """, (
+                    m["id"],
+                    author,
+                    stance,
+                    content,
+                    f"-{random.randint(1, 48)} hours",
+                    random.randint(1, 15),
+                ))
+        else:
+            c_stances = existing_comment_stances.get(m["id"], {})
+
+        # 재미·화제성 지표 산출 (total_score와 완전 독립)
+        news_30d = int(m.get("news_30d_count", weekly_stats.get("news_30d_count", 0)))
+        cont_news = int(m.get("controversy_news_count", weekly_stats.get("controversy_news_count", 0)))
+        recent_news = m.get("recent_news_items") or weekly_stats.get("recent_news_items") or m.get("recent_news_titles") or []
+        fun_scores = calculate_fun_metrics(
+            m,
+            total_score=scores["total_score"],
+            cheer_count=cheer_count,
+            comment_stats=c_stances,
+        )
+
         cursor.execute("""
-            INSERT INTO members (
+            INSERT OR REPLACE INTO members (
                 id, mona_cd, name, hanja_name, party, party_color, district, region_type,
                 committee, committee_role, committee_role_label, terms, gender, age,
                 photo_url, official_photo_url,
                 bio, quote, keywords_json, media_mentions, donation_account, cheer_count,
                 legislation_score, passed_score, attendance_score, bipartisan_score, committee_score,
                 voting_score, speech_score, policy_score, voting_rate, speech_count,
-                total_score, tier, tier_title, weekly_stats_json, recent_bills_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                total_score, fandom_score, controversy_score, hidden_gem_score,
+                news_30d_count, controversy_news_count, recent_news_json,
+                tier, tier_title, weekly_stats_json, recent_bills_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             m["id"],
             mona_cd,
@@ -393,7 +454,7 @@ def seed():
             json.dumps(keywords, ensure_ascii=False),
             media_mentions,
             donation_account,
-            base_cheer,
+            cheer_count,
             scores["legislation_score"],
             scores["passed_score"],
             scores["attendance_score"],
@@ -405,30 +466,25 @@ def seed():
             scores["voting_rate"],
             scores["speech_count"],
             scores["total_score"],
+            fun_scores["fandom_score"],
+            fun_scores["controversy_score"],
+            fun_scores["hidden_gem_score"],
+            news_30d,
+            cont_news,
+            json.dumps(recent_news, ensure_ascii=False),
             scores["tier"],
             scores["tier_title"],
             json.dumps(weekly_stats, ensure_ascii=False),
             json.dumps(recent_bills, ensure_ascii=False),
         ))
 
-        # 초기 댓글 2~3개 시딩
-        selected_comments = random.sample(SAMPLE_COMMENTS, k=random.randint(2, 3))
-        for author, stance, content in selected_comments:
-            cursor.execute("""
-                INSERT INTO comments (member_id, author, stance, content, created_at, likes)
-                VALUES (?, ?, ?, ?, datetime('now', ?), ?)
-            """, (
-                m["id"],
-                author,
-                stance,
-                content,
-                f"-{random.randint(1, 48)} hours",
-                random.randint(1, 15),
-            ))
-
     conn.commit()
     conn.close()
-    print(f"[+] Successfully seeded {len(members)} members with 6 Key Metrics & Fun Factors into SQLite!")
+
+    kst = timezone(timedelta(hours=9))
+    now_kst = datetime.now(kst).strftime("%Y-%m-%d %H:%M KST")
+    set_metadata("last_updated_at", now_kst)
+    print(f"[+] Successfully seeded {len(members)} members (v3.1) at {now_kst}!")
 
 if __name__ == "__main__":
     seed()

@@ -29,7 +29,9 @@ const searchInput = document.getElementById('member-search');
 const detailModal = document.getElementById('detail-modal');
 const toastContainer = document.getElementById('toast-container');
 
-// Sort Labels (v3.0 6 Axes)
+// Sort Labels (v3.1 Core 6 Axes + Fun 4 Modes)
+const FUN_SORT_KEYS = new Set(['fandom', 'controversy', 'hidden_gem', 'cheer']);
+
 const SORT_LABELS = {
     total: '종합 랭킹 기준 정렬 중 (입법품질 30% · 표결 20% · 발의 15% · 협치 15% · 직무 12% · 소통 8%)',
     passed: '🎯 입법 성과·품질 순 정렬 중 (가결/대안반영 실적 70% + 입법 타율 30%)',
@@ -38,7 +40,10 @@ const SORT_LABELS = {
     bipartisan: '🤝 초당적 협치·연대 순 정렬 중 (타 정당 공동발의 비율 + 평균 설득 인원)',
     committee: '⚖️ 위원회 직무·성실 순 정렬 중 (겸임 상임위·특위 참여 + 직책 + 성실도)',
     policy: '🎙️ 정책 소통·다양성 순 정렬 중 (발의 분야 다양성 + 상임위 발언 + 정책 활동)',
-    cheer: '💖 시민 실시간 응원순 정렬 중'
+    fandom: '🎭 [재미·화제성] ❤️ 인기·팬덤 지수 순 (응원·긍정댓글·30일 뉴스 화제성 — 종합점수 미반영)',
+    controversy: '🎭 [재미·화제성] 🔥 논란·핫이슈 온도 순 (쟁점뉴스·찬반표결·분발댓글 — 종합점수 미반영)',
+    hidden_gem: '🎭 [재미·화제성] 💎 흙속의 진주 순 (고득점 의정실력 대비 낮은 뉴스 노출 — 종합점수 미반영)',
+    cheer: '🎭 [재미·화제성] 💖 시민 실시간 응원순 (종합점수 미반영)'
 };
 
 // Initialize
@@ -80,6 +85,10 @@ async function loadSummaryStats() {
             if (cheerElem) cheerElem.textContent = `${data.total_cheers.toLocaleString()}회`;
             const memElem = document.getElementById('header-member-count');
             if (memElem) memElem.textContent = `${data.total_members}명`;
+            const updElem = document.getElementById('header-last-updated');
+            if (updElem && data.last_updated_at) {
+                updElem.textContent = data.last_updated_at;
+            }
             if (data.party_counts) {
                 updatePartyCounts(data.party_counts);
             }
@@ -122,20 +131,54 @@ async function loadMembers() {
     }
 }
 
+// Update Sort Tab Active UI & Fun Banner
+function updateSortTabStyles(activeSort) {
+    const sortTabs = document.querySelectorAll('.sort-tab');
+    sortTabs.forEach(t => {
+        t.classList.remove(
+            'active',
+            'bg-sky-600',
+            'bg-fuchsia-600',
+            'text-white',
+            'shadow-md',
+            'shadow-sky-600/30',
+            'shadow-fuchsia-600/30'
+        );
+        if (t.dataset.group === 'fun') {
+            t.classList.add('bg-white/90', 'dark:bg-slate-900/70');
+        } else {
+            t.classList.add('bg-white', 'dark:bg-slate-800', 'text-slate-600', 'dark:text-slate-300');
+        }
+        if (t.dataset.sort === activeSort) {
+            t.classList.add('active', 'text-white', 'shadow-md');
+            if (t.dataset.group === 'fun') {
+                t.classList.remove('bg-white/90', 'dark:bg-slate-900/70');
+                t.classList.add('bg-fuchsia-600', 'shadow-fuchsia-600/30');
+            } else {
+                t.classList.remove('bg-white', 'dark:bg-slate-800', 'text-slate-600', 'dark:text-slate-300');
+                t.classList.add('bg-sky-600', 'shadow-sky-600/30');
+            }
+        }
+    });
+
+    const funBanner = document.getElementById('fun-mode-banner');
+    if (funBanner) {
+        if (FUN_SORT_KEYS.has(activeSort)) {
+            funBanner.classList.remove('hidden');
+        } else {
+            funBanner.classList.add('hidden');
+        }
+    }
+}
+
 // Setup Event Listeners
 function setupEventListeners() {
     // Sort Tabs
     const sortTabs = document.querySelectorAll('.sort-tab');
     sortTabs.forEach(tab => {
         tab.addEventListener('click', () => {
-            sortTabs.forEach(t => {
-                t.classList.remove('active', 'bg-sky-600', 'text-white', 'shadow-md', 'shadow-sky-600/30');
-                t.classList.add('bg-slate-100', 'dark:bg-slate-800', 'text-slate-600', 'dark:text-slate-300');
-            });
-            tab.classList.add('active', 'bg-sky-600', 'text-white', 'shadow-md', 'shadow-sky-600/30');
-            tab.classList.remove('bg-slate-100', 'dark:bg-slate-800', 'text-slate-600', 'dark:text-slate-300');
-
             currentSort = tab.dataset.sort;
+            updateSortTabStyles(currentSort);
             if (currentRankLabel) {
                 currentRankLabel.textContent = SORT_LABELS[currentSort] || '';
             }
@@ -187,17 +230,10 @@ function resetFilters() {
     currentParty = 'all';
     searchQuery = '';
     if (searchInput) searchInput.value = '';
-    
-    const sortTabs = document.querySelectorAll('.sort-tab');
-    sortTabs.forEach(t => {
-        if (t.dataset.sort === 'total') {
-            t.classList.add('active', 'bg-sky-600', 'text-white', 'shadow-md');
-            t.classList.remove('bg-slate-100', 'dark:bg-slate-800', 'text-slate-600');
-        } else {
-            t.classList.remove('active', 'bg-sky-600', 'text-white', 'shadow-md');
-            t.classList.add('bg-slate-100', 'dark:bg-slate-800', 'text-slate-600');
-        }
-    });
+    updateSortTabStyles('total');
+    if (currentRankLabel) {
+        currentRankLabel.textContent = SORT_LABELS.total;
+    }
 
     const partyChips = document.querySelectorAll('.party-chip');
     partyChips.forEach(c => {
@@ -252,6 +288,9 @@ function getMemberStatValue(member, sortKey) {
     if (sortKey === 'committee' || sortKey === 'attendance') return member.committee_score ?? member.attendance_score ?? 0;
     if (sortKey === 'speech') return member.speech_count || 0;
     if (sortKey === 'policy') return member.policy_score || 0;
+    if (sortKey === 'fandom') return member.fandom_score || 0;
+    if (sortKey === 'controversy') return member.controversy_score || 0;
+    if (sortKey === 'hidden_gem') return member.hidden_gem_score || 0;
     if (sortKey === 'cheer') return member.cheer_count || 0;
     return member.total_score || 0;
 }
@@ -402,12 +441,24 @@ function createMemberCardElement(member, displayRank, rankText, isTied) {
     else if (member.tier === 'S') tierColor = 'bg-purple-600 text-white font-bold';
     else if (member.tier === 'A') tierColor = 'bg-sky-600 text-white font-bold';
 
-    // Primary score based on current sort
+    // Primary score based on current sort (Core vs Fun isolation)
     let primaryStatLabel = '종합 PoliScore';
     let primaryStatVal = member.total_score;
     let unit = '점';
+    let primaryColorClass = 'text-sky-600 dark:text-sky-400';
+    let highlightBoxClass = 'bg-slate-50 dark:bg-slate-800/60 border-slate-200/60 dark:border-slate-700/60';
+    let subNoteHtml = `<span class="text-[10px] text-slate-400 block">종합 PoliScore</span><span class="text-sm font-bold text-slate-700 dark:text-slate-300">${member.total_score}점</span>`;
+
     const commScore = member.committee_score ?? member.attendance_score ?? 0;
     const bipScore = member.bipartisan_score ?? 0;
+    const fandomScore = member.fandom_score ?? 0;
+    const contScore = member.controversy_score ?? 0;
+    const gemScore = member.hidden_gem_score ?? 0;
+    const news30d = member.news_30d_count ?? 0;
+    const contNews = member.controversy_news_count ?? 0;
+
+    let topFunBadgeHtml = `<span class="px-2 py-0.5 rounded-md text-[10px] bg-rose-500/10 text-rose-500 font-bold border border-rose-500/20">📰 뉴스 ${news30d}건</span>`;
+
     if (currentSort === 'passed') {
         primaryStatLabel = '🎯 입법 성과·품질';
         primaryStatVal = member.passed_score;
@@ -426,10 +477,35 @@ function createMemberCardElement(member, displayRank, rankText, isTied) {
     } else if (currentSort === 'policy') {
         primaryStatLabel = '🎙️ 정책 소통·다양성';
         primaryStatVal = member.policy_score;
+    } else if (currentSort === 'fandom') {
+        primaryStatLabel = '❤️ 인기·팬덤 지수';
+        primaryStatVal = fandomScore;
+        primaryColorClass = 'text-rose-500 dark:text-rose-400';
+        highlightBoxClass = 'bg-rose-500/10 border-rose-500/30';
+        topFunBadgeHtml = `<span class="px-2 py-0.5 rounded-md text-[10px] bg-rose-500/15 text-rose-500 font-bold border border-rose-500/30">❤️ 팬덤 ${fandomScore}</span>`;
+        subNoteHtml = `<span class="text-[10px] text-rose-400 block">뉴스 ${news30d}건 · 응원 ${member.cheer_count}</span><span class="text-xs font-bold text-slate-600 dark:text-slate-300">의정 ${member.total_score}점(별도)</span>`;
+    } else if (currentSort === 'controversy') {
+        primaryStatLabel = '🔥 논란·핫이슈 온도';
+        primaryStatVal = contScore;
+        unit = '°C';
+        primaryColorClass = contScore >= 70 ? 'text-red-500' : 'text-amber-500';
+        highlightBoxClass = 'bg-amber-500/10 border-amber-500/30';
+        topFunBadgeHtml = `<span class="px-2 py-0.5 rounded-md text-[10px] bg-amber-500/15 text-amber-500 font-bold border border-amber-500/30">🔥 ${contScore}°C</span>`;
+        subNoteHtml = `<span class="text-[10px] text-amber-500 block">쟁점기사 ${contNews}/${news30d}건</span><span class="text-xs font-bold text-slate-600 dark:text-slate-300">의정 ${member.total_score}점(별도)</span>`;
+    } else if (currentSort === 'hidden_gem') {
+        primaryStatLabel = '💎 흙속의 진주 지수';
+        primaryStatVal = gemScore;
+        primaryColorClass = 'text-cyan-600 dark:text-cyan-400';
+        highlightBoxClass = 'bg-cyan-500/10 border-cyan-500/30';
+        topFunBadgeHtml = `<span class="px-2 py-0.5 rounded-md text-[10px] bg-cyan-500/15 text-cyan-500 font-bold border border-cyan-500/30">💎 진주 ${gemScore}</span>`;
+        subNoteHtml = `<span class="text-[10px] text-cyan-500 block">의정 ${member.total_score}점 · 뉴스 ${news30d}건</span><span class="text-xs font-bold text-slate-600 dark:text-slate-300">저노출 숨은고수</span>`;
     } else if (currentSort === 'cheer') {
         primaryStatLabel = '💖 시민 실시간 응원';
         primaryStatVal = member.cheer_count;
         unit = '개';
+        primaryColorClass = 'text-pink-500';
+        highlightBoxClass = 'bg-pink-500/10 border-pink-500/30';
+        subNoteHtml = `<span class="text-[10px] text-pink-400 block">종합점수 미반영</span><span class="text-xs font-bold text-slate-600 dark:text-slate-300">의정 ${member.total_score}점</span>`;
     }
 
     // Keywords Tags HTML
@@ -448,7 +524,7 @@ function createMemberCardElement(member, displayRank, rankText, isTied) {
             </span>
             <div class="flex items-center space-x-1.5">
                 <span class="px-2 py-0.5 rounded-md text-[10px] ${tierColor}">${member.tier} TIER</span>
-                <span class="px-2 py-0.5 rounded-md text-[10px] bg-rose-500/10 text-rose-500 font-bold border border-rose-500/20">🔥 언급 ${(member.media_mentions || 1200).toLocaleString()}</span>
+                ${topFunBadgeHtml}
             </div>
         </div>
 
@@ -496,14 +572,13 @@ function createMemberCardElement(member, displayRank, rankText, isTied) {
         </div>
 
         <!-- Score Highlight Box -->
-        <div class="my-2 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between">
+        <div class="my-2 p-3 rounded-2xl border ${highlightBoxClass} flex items-center justify-between">
             <div>
                 <span class="text-[10px] uppercase font-bold text-slate-400 block">${primaryStatLabel}</span>
-                <span class="text-xl sm:text-2xl font-black text-sky-600 dark:text-sky-400">${primaryStatVal}<span class="text-xs font-semibold text-slate-400 ml-0.5">${unit}</span></span>
+                <span class="text-xl sm:text-2xl font-black ${primaryColorClass}">${primaryStatVal}<span class="text-xs font-semibold text-slate-400 ml-0.5">${unit}</span></span>
             </div>
             <div class="text-right">
-                <span class="text-[10px] text-slate-400 block">종합 PoliScore</span>
-                <span class="text-sm font-bold text-slate-700 dark:text-slate-300">${member.total_score}점</span>
+                ${subNoteHtml}
             </div>
         </div>
 
@@ -664,6 +739,15 @@ async function openModal(memberId) {
             keywordsElem.innerHTML = member.keywords.map(kw => `<span class="px-2 py-0.5 rounded-md bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold">${kw}</span>`).join(' ');
         }
 
+        const funBadgesElem = document.getElementById('modal-fun-badges');
+        if (funBadgesElem) {
+            funBadgesElem.innerHTML = `
+                <span class="px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-500 border border-rose-500/25 text-[11px] font-bold" title="종합점수 미반영">❤️ 팬덤 ${member.fandom_score ?? 0}</span>
+                <span class="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-500 border border-amber-500/25 text-[11px] font-bold" title="종합점수 미반영">🔥 핫이슈 ${member.controversy_score ?? 0}°C</span>
+                <span class="px-2 py-0.5 rounded-md bg-cyan-500/10 text-cyan-500 border border-cyan-500/25 text-[11px] font-bold" title="종합점수 미반영">💎 숨은고수 ${member.hidden_gem_score ?? 0}</span>
+            `;
+        }
+
         const partyBadge = document.getElementById('modal-party-badge');
         partyBadge.textContent = member.party;
         partyBadge.style.backgroundColor = member.party_color;
@@ -693,6 +777,7 @@ async function openModal(memberId) {
         document.getElementById('stat-pol-bar').style.width = `${member.policy_score}%`;
 
         renderModalFactSheet14(member);
+        renderModalNews(member);
 
         document.getElementById('modal-donation-account').textContent = member.donation_account || '선관위 정치후원금센터 참조';
         document.getElementById('modal-cheer-count').textContent = member.cheer_count;
@@ -867,7 +952,45 @@ function renderModalFactSheet14(member) {
     }
 }
 
-// Open & Close Methodology Modal
+// Render Recent 30d News Headlines in Modal
+function renderModalNews(member) {
+    const list = document.getElementById('modal-news-list');
+    const meta = document.getElementById('modal-news-meta');
+    if (!list) return;
+
+    const newsCnt = member.news_30d_count ?? 0;
+    const contCnt = member.controversy_news_count ?? 0;
+    if (meta) {
+        meta.textContent = `최근 30일 ${newsCnt}건 (쟁점 키워드 ${contCnt}건)`;
+    }
+
+    const items = member.recent_news_items || [];
+    const titles = member.recent_news_titles || [];
+    if (items.length === 0 && titles.length === 0) {
+        list.innerHTML = `<p class="text-xs text-slate-400 py-2">최근 30일 이내 수집된 뉴스 헤드라인이 없습니다.</p>`;
+        return;
+    }
+
+    const normalized = items.length > 0
+        ? items.slice(0, 2)
+        : titles.slice(0, 2).map(t => ({ title: t, link: '', pub_date: '' }));
+
+    list.innerHTML = normalized.map(n => {
+        const title = typeof n === 'string' ? n : (n.title || '');
+        const link = typeof n === 'object' ? (n.link || '') : '';
+        const linkBtn = link
+            ? `<a href="${link}" target="_blank" rel="noopener noreferrer" class="text-[10px] text-rose-500 hover:underline font-semibold whitespace-nowrap ml-2"><i class="fa-solid fa-arrow-up-right-from-square mr-0.5"></i>기사보기</a>`
+            : '';
+        return `
+            <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between gap-2">
+                <span class="text-xs font-medium text-slate-700 dark:text-slate-200 flex-1 line-clamp-1">${title}</span>
+                ${linkBtn}
+            </div>
+        `;
+    }).join('');
+}
+
+// Open & Close Methodology Modal (Fallback if called)
 function openMethodologyModal() {
     const m = document.getElementById('methodology-modal');
     if (m) {

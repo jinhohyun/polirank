@@ -28,8 +28,8 @@ from scoring import SCORING_METHODOLOGY
 
 app = FastAPI(
     title="PoliRank API",
-    description="제22대 국회의원 299인 6대 핵심 축 · 14대 실제 공공 팩트 지표 랭킹 플랫폼 API",
-    version="3.0.0"
+    description="제22대 국회의원 299인 6대 핵심 축 · 14대 실제 공공 팩트 + 재미·화제성 랭킹 API",
+    version="3.1.0"
 )
 
 # CORS 설정
@@ -64,11 +64,11 @@ def startup_event():
     try:
         c.execute("SELECT COUNT(*) as cnt FROM members")
         cnt = c.fetchone()["cnt"]
-        c.execute("SELECT COUNT(*) as v3_cnt FROM members WHERE committee_score > 0")
-        v3_cnt = c.fetchone()["v3_cnt"]
+        c.execute("SELECT COUNT(*) as v31_cnt FROM members WHERE fandom_score > 0 OR hidden_gem_score > 0")
+        v31_cnt = c.fetchone()["v31_cnt"]
         has_all_seed = os.path.exists(os.path.join(CURRENT_DIR, "seed_data_all.json"))
-        if cnt == 0 or (has_all_seed and (cnt < 200 or v3_cnt == 0)):
-            print(f"[*] Database requires v3.0 seeding (total={cnt}, v3={v3_cnt}). Seeding 299-member data...")
+        if cnt == 0 or (has_all_seed and (cnt < 200 or v31_cnt == 0)):
+            print(f"[*] Database requires v3.1 seeding (total={cnt}, v31={v31_cnt}). Seeding 299-member data...")
             seed()
     except Exception as e:
         print("[!] Startup check failed, running seed:", e)
@@ -84,6 +84,14 @@ def read_root():
         return FileResponse(index_path)
     return HTMLResponse("<h1>PoliRank API Server is Running</h1><p>index.html not found yet.</p>")
 
+@app.get("/methodology", response_class=HTMLResponse)
+def read_methodology():
+    """점수 산출 방식 및 가중치 설명 전용 페이지 서빙"""
+    meth_path = os.path.join(STATIC_DIR, "methodology.html")
+    if os.path.exists(meth_path):
+        return FileResponse(meth_path)
+    return HTMLResponse("<h1>Methodology Page Not Found</h1>", status_code=404)
+
 @app.get("/api/stats/summary")
 def get_stats():
     """상단 헤더 라이브 통계 지표"""
@@ -91,16 +99,16 @@ def get_stats():
 
 @app.get("/api/scoring/methodology")
 def get_methodology():
-    """v3.0 6대 핵심 축 및 가중치 설계 원칙"""
+    """v3.1 6대 핵심 축 및 가중치 설계 원칙"""
     return SCORING_METHODOLOGY
 
 @app.get("/api/members")
 def list_members(
     party: Optional[str] = Query(None, description="정당 필터 (all, 더불어민주당, 국민의힘 등)"),
-    sort_by: str = Query("total", description="정렬 기준 (total, passed, voting, legislation, bipartisan, committee, policy, cheer)"),
+    sort_by: str = Query("total", description="정렬 기준 (total, passed, voting, legislation, bipartisan, committee, policy, cheer, fandom, controversy, hidden_gem)"),
     search: Optional[str] = Query(None, description="이름, 지역구, 상임위, 어록 검색")
 ):
-    """국회의원 랭킹 목록 조회 (v3.0 6대 핵심 축 & 14대 지표)"""
+    """국회의원 랭킹 목록 조회 (v3.1 6대 핵심 축 & 재미·화제성 랭킹)"""
     members = get_all_members(party=party, sort_by=sort_by, search=search)
     for m in members:
         m["avatar_url"] = f"/api/members/{m['id']}/avatar.svg"

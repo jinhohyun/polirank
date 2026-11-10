@@ -10,7 +10,7 @@ if CURRENT_DIR not in sys.path:
     sys.path.insert(0, CURRENT_DIR)
 
 from database import init_db, get_all_members, get_connection
-from scoring import calculate_member_scores
+from scoring import calculate_member_scores, calculate_fun_metrics
 from avatar_generator import generate_caricature_svg
 from starlette.testclient import TestClient
 from app import app
@@ -124,18 +124,28 @@ class TestPoliRankV3(unittest.TestCase):
         print(f"[PASS] Caricature SVG Avatar generator verified for all {len(all_members)} members.")
 
     def test_03_api_root_methodology_and_stats(self):
-        """메인 UI(v3.0 14대 팩트 시트/가중치 안내) 및 통계/방법론 API 검증"""
+        """메인 UI(v3.1 2그룹 분리/14대 팩트 시트), /methodology 전용 페이지 및 통계 API 검증"""
         res_root = self.client.get("/")
         self.assertEqual(res_root.status_code, 200)
         self.assertIn("PoliRank", res_root.text)
-        self.assertIn("openMethodologyModal", res_root.text)
+        self.assertIn('href="/methodology"', res_root.text)
+        self.assertIn('data-group="core"', res_root.text)
+        self.assertIn('data-group="fun"', res_root.text)
+        self.assertIn('data-sort="fandom"', res_root.text)
+        self.assertIn('data-sort="controversy"', res_root.text)
+        self.assertIn('data-sort="hidden_gem"', res_root.text)
+        self.assertIn("fun-mode-banner", res_root.text)
         self.assertIn("modal-fact-sheet-grid", res_root.text)
-        self.assertIn('data-sort="bipartisan"', res_root.text)
-        self.assertIn('data-sort="committee"', res_root.text)
+
+        res_meth_page = self.client.get("/methodology")
+        self.assertEqual(res_meth_page.status_code, 200)
+        self.assertIn("weightDonutChart", res_meth_page.text)
+        self.assertIn("랭킹 보드로 돌아가기", res_meth_page.text)
 
         res_js = self.client.get("/static/app.js")
         self.assertEqual(res_js.status_code, 200)
         self.assertIn("renderModalFactSheet14", res_js.text)
+        self.assertIn("renderModalNews", res_js.text)
         self.assertIn('loading="lazy"', res_js.text)
         self.assertIn("PAGE_SIZE = 36", res_js.text)
 
@@ -150,10 +160,12 @@ class TestPoliRankV3(unittest.TestCase):
         data = res_stats.json()
         self.assertGreaterEqual(data["total_members"], 290)
         self.assertEqual(data["party_counts"]["all"], data["total_members"])
-        print(f"[PASS] UI v3.0, Methodology API (weight=100%), Stats API verified: {data['total_members']} members.")
+        self.assertIn("last_updated_at", data)
+        self.assertIn("update_schedule", data)
+        print(f"[PASS] UI v3.1, /methodology page, & Stats API verified: {data['total_members']} members (updated: {data['last_updated_at']}).")
 
-    def test_04_api_member_ranking_six_axes_and_filters(self):
-        """v3.0 6대 핵심 축 정렬(초당적협치·위원회직무 포함), 공동순위, 정당/검색 필터 검증"""
+    def test_04_api_member_ranking_core_and_fun_sorts(self):
+        """v3.1 본질 6대 축 + 재미 랭킹 3종(인기·논란·흙속의진주) 정렬 및 공동순위 검증"""
         for sort_key, attr in [
             ("total", "total_score"),
             ("passed", "passed_score"),
@@ -162,6 +174,9 @@ class TestPoliRankV3(unittest.TestCase):
             ("bipartisan", "bipartisan_score"),
             ("committee", "committee_score"),
             ("policy", "policy_score"),
+            ("fandom", "fandom_score"),
+            ("controversy", "controversy_score"),
+            ("hidden_gem", "hidden_gem_score"),
             ("cheer", "cheer_count"),
         ]:
             res = self.client.get(f"/api/members?sort_by={sort_key}")
@@ -187,7 +202,7 @@ class TestPoliRankV3(unittest.TestCase):
         self.assertEqual(res_etc.status_code, 200)
         self.assertGreaterEqual(len(res_etc.json()["members"]), 1)
 
-        print("[PASS] v3.0 6-Axis Sortings (incl. bipartisan & committee), Tied Ranking & Filters verified.")
+        print("[PASS] v3.1 Core 6-Axis & Fun 3-Ranking Sortings, Tied Ranking & Filters verified.")
 
     def test_05_api_member_detail_and_14_metrics(self):
         """의원 상세 6각 레이더 차트 및 14대 실제 공공 팩트 지표(fact_sheet_14) 검증"""
@@ -228,19 +243,30 @@ class TestPoliRankV3(unittest.TestCase):
         for k in required_14_keys:
             self.assertIn(k, fs, f"Missing 14-metric key: {k}")
 
+        # 재미 지표 및 뉴스 데이터 존재 확인
+        for fk in ["fandom_score", "controversy_score", "hidden_gem_score", "news_30d_count", "recent_news_titles"]:
+            self.assertIn(fk, detail)
+
         res_avatar = self.client.get(f"/api/members/{first_member_id}/avatar.svg")
         self.assertEqual(res_avatar.status_code, 200)
         self.assertEqual(res_avatar.headers["content-type"], "image/svg+xml")
         print(
-            f"[PASS] Detail Radar & 14-Metric Fact Sheet verified for: {detail['name']} ({detail['total_score']}점, 협치 {fs['bipartisan_rate']}%, 타율 {fs['passage_efficiency']}%)"
+            f"[PASS] Detail Radar, 14-Metric Fact Sheet & Fun Badges verified for: {detail['name']} ({detail['total_score']}점, 팬덤 {detail['fandom_score']})"
         )
 
-    def test_06_cheer_and_comment_features(self):
-        """실시간 응원 및 토론 댓글 기능 검증"""
+    def test_06_cheer_comment_and_total_score_isolation(self):
+        """실시간 응원/댓글 및 재미 지표가 total_score에 영향을 주지 않는 완전 격리 불변성 검증"""
         res = self.client.get("/api/members")
         member = res.json()["members"][0]
         member_id = member["id"]
         old_cheer = member["cheer_count"]
+        old_total = member["total_score"]
+
+        # 재미 지표 단위 계산 불변성 검증 (뉴스·응원이 극단적으로 달라져도 total_score는 불변)
+        fun_low = calculate_fun_metrics({"news_30d_count": 2, "media_mentions": 100}, total_score=old_total, cheer_count=10)
+        fun_high = calculate_fun_metrics({"news_30d_count": 90, "controversy_news_count": 40, "media_mentions": 8000}, total_score=old_total, cheer_count=5000)
+        self.assertGreater(fun_high["fandom_score"], fun_low["fandom_score"])
+        self.assertGreater(fun_high["controversy_score"], fun_low["controversy_score"])
 
         res_cheer = self.client.post(f"/api/members/{member_id}/cheer")
         self.assertEqual(res_cheer.status_code, 200)
@@ -251,20 +277,26 @@ class TestPoliRankV3(unittest.TestCase):
             f"/api/members/{member_id}/comments",
             json={
                 "author": "유권자 시민",
-                "stance": "proposal",
-                "content": "v3.0 입법품질과 초당적 협치 지표까지 반영하니 평가가 훨씬 공정합니다!",
+                "stance": "critique",
+                "content": "재미 지표가 변동되어도 본질 의정 점수 total_score는 영향을 받지 않아야 합니다.",
             },
         )
         self.assertEqual(res_comment.status_code, 200)
         comment_id = res_comment.json()["comment"]["id"]
         self.assertIsNotNone(comment_id)
 
+        # 응원/댓글 이후에도 total_score 불변 확인
+        after_detail = self.client.get(f"/api/members/{member_id}").json()
+        self.assertEqual(after_detail["total_score"], old_total)
+
         conn = get_connection()
         conn.execute("DELETE FROM comments WHERE id = ?", (comment_id,))
         conn.execute("UPDATE members SET cheer_count = ? WHERE id = ?", (old_cheer, member_id))
+        from database import _refresh_fun_scores_in_conn
+        _refresh_fun_scores_in_conn(conn, member_id)
         conn.commit()
         conn.close()
-        print(f"[PASS] Cheer and Comment features verified (Cheer: {old_cheer} -> {new_cheer})")
+        print(f"[PASS] Cheer, Comment & total_score Isolation verified (Cheer: {old_cheer}->{new_cheer}, total_score={old_total} unchanged)")
 
 
 if __name__ == "__main__":

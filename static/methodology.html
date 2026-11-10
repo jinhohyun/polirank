@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="ko" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PoliRank 점수 산출 방식 - 6대 핵심 축 · 14대 공공 팩트 · 재미 지표 원리</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Pretendard', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 min-h-screen transition-colors duration-200">
+
+    <!-- Top Navigation -->
+    <header class="sticky top-0 z-40 glass-nav border-b border-slate-200/80 dark:border-slate-800">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16 sm:h-20">
+                <div class="flex items-center space-x-3">
+                    <a href="/" class="inline-flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-sky-600 hover:bg-sky-500 text-white shadow-md shadow-sky-600/25 transition-all">
+                        <i class="fa-solid fa-arrow-left"></i>
+                        <span>랭킹 보드로 돌아가기</span>
+                    </a>
+                    <div class="hidden sm:flex items-center space-x-2 pl-2">
+                        <span class="text-lg font-black bg-gradient-to-r from-sky-500 via-indigo-500 to-rose-500 bg-clip-text text-transparent">PoliRank</span>
+                        <span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">Methodology v3.1</span>
+                    </div>
+                </div>
+
+                <div class="flex items-center space-x-3">
+                    <span class="hidden md:inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-xs font-semibold">
+                        <i class="fa-solid fa-rotate"></i>
+                        <span>매주 월요일 06:00 KST 자동 업데이트</span>
+                    </span>
+                    <button id="theme-toggle" class="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:text-sky-500 transition-colors" title="다크/라이트 모드 전환">
+                        <i class="fa-solid fa-moon dark:hidden"></i>
+                        <i class="fa-solid fa-sun hidden dark:inline"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+
+        <!-- Hero Section -->
+        <section class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 p-7 sm:p-10 text-white shadow-xl border border-indigo-900/40">
+            <div class="absolute -right-12 -bottom-12 w-80 h-80 rounded-full bg-gradient-to-tr from-sky-500/20 to-rose-500/20 blur-3xl pointer-events-none"></div>
+            <div class="relative z-10 max-w-3xl space-y-3">
+                <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-xs text-sky-300 font-semibold">
+                    <i class="fa-solid fa-compass-drafting"></i>
+                    <span>100% 공개 산식 & 공공 API 원천 데이터 기반</span>
+                </div>
+                <h1 class="text-2xl sm:text-4xl font-black tracking-tight leading-tight">
+                    PoliRank 점수는 <span class="bg-gradient-to-r from-sky-400 via-emerald-300 to-amber-300 bg-clip-text text-transparent">어떻게 계산될까요?</span>
+                </h1>
+                <p class="text-sm sm:text-base text-slate-300 leading-relaxed">
+                    단순 법안 건수 위주 평가가 낳는 <strong>‘쪼개기·양치기 발의’</strong>를 막고, 대한민국 헌법기관인 국회의원의 본질적 책무
+                    (<strong>입법 완성도 &gt; 표결 참여 &gt; 발의·협업 &gt; 초당적 협치 &gt; 위원회 직무 &gt; 정책 소통</strong>)에 따라
+                    6대 핵심 축과 14개 실제 공공 팩트 지표로 점수를 산출합니다.
+                </p>
+            </div>
+        </section>
+
+        <!-- Section 1: Donut Chart + Weight Hierarchy -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <!-- Chart Card -->
+            <div class="lg:col-span-5 glass-card rounded-3xl p-6 flex flex-col items-center justify-between">
+                <div class="w-full">
+                    <h2 class="text-base font-extrabold text-slate-900 dark:text-white flex items-center space-x-2">
+                        <span>🍩</span>
+                        <span>PoliScore 100점 가중치 구조</span>
+                    </h2>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">메이저(50%) · 핵심(30%) · 중요/마이너(20%) 위계 설계</p>
+                </div>
+                <div class="w-full max-w-[300px] h-[280px] my-4">
+                    <canvas id="weightDonutChart"></canvas>
+                </div>
+                <div class="w-full p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-700 dark:text-emerald-300 font-medium text-center">
+                    🎯 입법 성과·품질(30%) + 🗳️ 본회의 표결(20%) = 전체 점수의 <strong>50%</strong>
+                </div>
+            </div>
+
+            <!-- 6 Axes Detailed Formulas -->
+            <div class="lg:col-span-7 glass-card rounded-3xl p-6 space-y-4">
+                <h2 class="text-base font-extrabold text-slate-900 dark:text-white flex items-center space-x-2">
+                    <span>⚖️</span>
+                    <span>6대 핵심 축별 산출 공식</span>
+                </h2>
+                <div class="space-y-3 text-xs">
+                    <div class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-1">
+                        <div class="flex items-center justify-between font-bold text-emerald-600 dark:text-emerald-400">
+                            <span>1. 🎯 입법 성과·품질 (passed_score)</span>
+                            <span class="px-2 py-0.5 rounded-full bg-emerald-500/15">가중치 30% · 메이저 1위</span>
+                        </div>
+                        <p class="text-slate-600 dark:text-slate-300 leading-relaxed">
+                            <strong>절대 실적(70%)</strong> + <strong>입법 타율(30%)</strong>. 원안가결(×3.0), 수정가결(×2.5), 대안반영폐기(×1.0)를 로그 정규화하고, 최소 발의 5건 보정이 적용된 가결 효율(<code>passage_efficiency</code>)을 결합해 발의량만 부풀리는 양치기 입법을 걸러냅니다.
+                        </p>
+                    </div>
+                    <div class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-1">
+                        <div class="flex items-center justify-between font-bold text-teal-600 dark:text-teal-400">
+                            <span>2. 🗳️ 본회의 표결·참여 (voting_score)</span>
+                            <span class="px-2 py-0.5 rounded-full bg-teal-500/15">가중치 20% · 메이저 2위</span>
+                        </div>
+                        <p class="text-slate-600 dark:text-slate-300 leading-relaxed">
+                            제22대 최근 서로 다른 본회의 날짜의 통과 안건 10건에 대한 실제 전자표결 참여율(92%)과 기권 제외 찬·반 적극 의사표시율(8%)을 반영합니다. (재적 기간 내 안건만 분모 산입)
+                        </p>
+                    </div>
+                    <div class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-1">
+                        <div class="flex items-center justify-between font-bold text-sky-600 dark:text-sky-400">
+                            <span>3. 📜 입법 발의·협업 (legislation_score)</span>
+                            <span class="px-2 py-0.5 rounded-full bg-sky-500/15">가중치 15% · 핵심 축</span>
+                        </div>
+                        <p class="text-slate-600 dark:text-slate-300 leading-relaxed">
+                            대표발의 총 건수 로그 정규화(75%) + 3,300여 건의 법안 풀에서 타 의원 법안에 공동발의로 참여한 횟수(<code>cosponsor_participations</code>, 25%)를 결합합니다.
+                        </p>
+                    </div>
+                    <div class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-1">
+                        <div class="flex items-center justify-between font-bold text-indigo-600 dark:text-indigo-400">
+                            <span>4. 🤝 초당적 협치·연대 (bipartisan_score)</span>
+                            <span class="px-2 py-0.5 rounded-full bg-indigo-500/15">가중치 15% · 신규 핵심 축</span>
+                        </div>
+                        <p class="text-slate-600 dark:text-slate-300 leading-relaxed">
+                            최근 대표발의 법안 중 타 정당 의원이 1명 이상 공동발의에 동참한 비율 및 타당 의원 비중(65%) + 법안당 평균 공동발의 설득 인원(35%)으로 여야 협치 역량을 측정합니다.
+                        </p>
+                    </div>
+                    <div class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-1">
+                        <div class="flex items-center justify-between font-bold text-amber-600 dark:text-amber-400">
+                            <span>5. ⚖️ 위원회 직무·성실 (committee_score)</span>
+                            <span class="px-2 py-0.5 rounded-full bg-amber-500/15">가중치 12% · 중요 축</span>
+                        </div>
+                        <p class="text-slate-600 dark:text-slate-300 leading-relaxed">
+                            겸임 상임위 수(<code>committee_count</code>), 예결특위·국회운영위·정보위·국조특위 등 핵심 겸임위 참여 여부, 의장/위원장/간사 직책 수행, 징계/무단결석 여부 및 본회의 성실도를 반영합니다.
+                        </p>
+                    </div>
+                    <div class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-1">
+                        <div class="flex items-center justify-between font-bold text-purple-600 dark:text-purple-400">
+                            <span>6. 🎙️ 정책 소통·다양성 (policy_score)</span>
+                            <span class="px-2 py-0.5 rounded-full bg-purple-500/15">가중치 8% · 마이너 축</span>
+                        </div>
+                        <p class="text-slate-600 dark:text-slate-300 leading-relaxed">
+                            발의 법안이 걸쳐 있는 서로 다른 소관 상임위 수(<code>policy_diversity</code>, 45%), 상임위 발언 지표(30%), 세미나·대정부질문·언론 아젠다(25%)를 반영합니다.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 2: 14 Internal Public Metrics & Data Integrity -->
+        <section class="glass-card rounded-3xl p-6 sm:p-8 space-y-5">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                    <h2 class="text-lg font-extrabold text-slate-900 dark:text-white flex items-center space-x-2">
+                        <span>🔬</span>
+                        <span>내부 14대 실제 공공 팩트 지표 & 데이터 무결성 원칙</span>
+                    </h2>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">부분문자열 검색 오염 차단 및 동명이인 MONA_CD 정밀 분리를 적용합니다.</p>
+                </div>
+                <span class="px-3 py-1 rounded-full text-xs font-bold bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 self-start">열린국회정보 Open API</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 text-xs">
+                <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-1.5">
+                    <div class="font-bold text-slate-900 dark:text-white">🛡️ 양치기 발의 필터 (최소 5건 보정)</div>
+                    <p class="text-slate-500 dark:text-slate-400 leading-relaxed">
+                        발의 건수가 1~2건에 불과할 때 우연히 1건 통과해 타율 100%가 되는 왜곡을 막기 위해, 분모에 <code>max(5, 대표발의수)</code> 보정을 적용합니다.
+                    </p>
+                </div>
+                <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-1.5">
+                    <div class="font-bold text-slate-900 dark:text-white">🔍 동명이인 · 부분문자열 완전 격리</div>
+                    <p class="text-slate-500 dark:text-slate-400 leading-relaxed">
+                        <code>김현</code> 검색 시 <code>김현정</code>이 섞이지 않도록 <code>{이름}의원</code>·<code>{이름}ㆍ</code> 정확 매칭을 쓰며, 동명이인(예: 박지원 2인)은 고유 코드(<code>MONA_CD</code>)로 100% 분리합니다.
+                    </p>
+                </div>
+                <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-1.5">
+                    <div class="font-bold text-slate-900 dark:text-white">🏛️ 3대 국회 Open API 원천 교차 검증</div>
+                    <p class="text-slate-500 dark:text-slate-400 leading-relaxed">
+                        ① 현역 의원 현황(<code>nwvrqwxyaytdsfvhu</code>) ② 의안정보(<code>nzmimeepazxkubdpn</code>) ③ 본회의 표결현황(<code>nojepdqqaweusdfbi</code>) 100% 실측 데이터를 매주 자동 동기화합니다.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 3: Fun Rankings (100% Isolated from PoliScore) -->
+        <section class="rounded-3xl p-6 sm:p-8 bg-gradient-to-br from-fuchsia-500/10 via-rose-500/10 to-amber-500/10 border border-fuchsia-500/25 space-y-5">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                    <div class="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full bg-fuchsia-500/15 text-fuchsia-600 dark:text-fuchsia-300 text-[11px] font-bold mb-1.5">
+                        <span>⚠️ 종합 의정 점수(PoliScore)와 100% 독립</span>
+                    </div>
+                    <h2 class="text-lg sm:text-xl font-black text-slate-900 dark:text-white">🎭 재미·화제성 랭킹 산출 방식</h2>
+                    <p class="text-xs text-slate-600 dark:text-slate-300 mt-1">
+                        인기, 언론 논란, 대중 인지도가 본질 의정 능력 평가(<code>total_score</code>)를 왜곡하지 않도록 <strong>완전히 분리된 별도 재미 지표</strong>로 계산합니다.
+                    </p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                <div class="p-4 rounded-2xl bg-white/80 dark:bg-slate-900/70 border border-rose-500/20 space-y-2">
+                    <div class="text-sm font-black text-rose-500">❤️ 인기·팬덤 지수 (0~100)</div>
+                    <p class="text-slate-600 dark:text-slate-300 leading-relaxed">
+                        유권자의 실시간 <strong>응원 클릭 수</strong> + 토론 댓글 중 <strong>💖 응원 비중</strong> + 최근 30일 <strong>Google News 기사 화제성</strong> 및 누적 언론 언급량을 조합한 대중 팬덤 지수입니다.
+                    </p>
+                </div>
+                <div class="p-4 rounded-2xl bg-white/80 dark:bg-slate-900/70 border border-amber-500/20 space-y-2">
+                    <div class="text-sm font-black text-amber-500">🔥 논란·핫이슈 온도 (0~100°C)</div>
+                    <p class="text-slate-600 dark:text-slate-300 leading-relaxed">
+                        최근 30일 뉴스 중 쟁점·갈등 키워드(<code>논란, 의혹, 비판, 공방, 설전, 사퇴, 징계, 고발, 충돌, 반발, 항의, 특혜, 파열음, 갈등, 반대</code> 등) 포함 기사 비율·건수 + 본회의 반대/기권 표결 + 🧐 분발 댓글 비율로 측정한 중립적 화제성 온도계입니다.
+                    </p>
+                </div>
+                <div class="p-4 rounded-2xl bg-white/80 dark:bg-slate-900/70 border border-cyan-500/20 space-y-2">
+                    <div class="text-sm font-black text-cyan-500">💎 흙속의 진주 지수 (0~100)</div>
+                    <p class="text-slate-600 dark:text-slate-300 leading-relaxed">
+                        <strong>의정 종합 점수(PoliScore)는 매우 높지만</strong>, 최근 30일 뉴스 노출과 언론 스포트라이트는 상대적으로 적은 <strong>조용한 실력자</strong>를 발굴하는 역발상 지수입니다.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 4: Weekly Automation -->
+        <section class="glass-card rounded-3xl p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div class="space-y-1">
+                <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center space-x-2">
+                    <i class="fa-solid fa-clock-rotate-left text-sky-500"></i>
+                    <span>매주 자동 업데이트 & 시민 데이터 무손실 보존</span>
+                </h3>
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                    GitHub Actions 스케줄러가 매주 월요일 오전 06:00(KST)마다 최신 의정·표결·뉴스 데이터를 재수집합니다. 업데이트 중에도 시민들이 남긴 <strong>응원 횟수와 토론 댓글은 100% 보존</strong>됩니다.
+                </p>
+            </div>
+            <a href="/" class="px-5 py-2.5 rounded-2xl text-xs font-bold bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:bg-sky-600 dark:hover:bg-sky-400 transition-colors whitespace-nowrap">
+                랭킹 보드 확인하기 →
+            </a>
+        </section>
+
+    </main>
+
+    <script>
+        // Theme synchronization with main board
+        function initTheme() {
+            const saved = localStorage.getItem('polirank_theme');
+            if (saved === 'light') {
+                document.documentElement.classList.remove('dark');
+            } else {
+                document.documentElement.classList.add('dark');
+            }
+            const btn = document.getElementById('theme-toggle');
+            if (btn) {
+                btn.addEventListener('click', () => {
+                    const isDark = document.documentElement.classList.toggle('dark');
+                    localStorage.setItem('polirank_theme', isDark ? 'dark' : 'light');
+                    renderDonut();
+                });
+            }
+        }
+
+        let donutChart = null;
+        function renderDonut() {
+            const canvas = document.getElementById('weightDonutChart');
+            if (!canvas) return;
+            if (donutChart) donutChart.destroy();
+            const isDark = document.documentElement.classList.contains('dark');
+            donutChart = new Chart(canvas.getContext('2d'), {
+                type: 'doughnut',
+                data: {
+                    labels: [
+                        '🎯 입법 성과·품질 (30%)',
+                        '🗳️ 본회의 표결·참여 (20%)',
+                        '📜 입법 발의·협업 (15%)',
+                        '🤝 초당적 협치·연대 (15%)',
+                        '⚖️ 위원회 직무·성실 (12%)',
+                        '🎙️ 정책 소통·다양성 (8%)'
+                    ],
+                    datasets: [{
+                        data: [30, 20, 15, 15, 12, 8],
+                        backgroundColor: ['#10B981', '#14B8A6', '#0EA5E9', '#6366F1', '#F59E0B', '#A855F7'],
+                        borderColor: isDark ? '#0F172A' : '#FFFFFF',
+                        borderWidth: 3,
+                        hoverOffset: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '58%',
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: isDark ? '#CBD5E1' : '#334155',
+                                font: { size: 11, weight: 'bold' },
+                                boxWidth: 12,
+                                padding: 10
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initTheme();
+            renderDonut();
+        });
+    </script>
+</body>
+</html>

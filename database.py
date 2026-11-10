@@ -56,6 +56,12 @@ def init_db():
         voting_rate REAL DEFAULT 0.0,
         speech_count INTEGER DEFAULT 0,
         total_score REAL DEFAULT 0.0,
+        fandom_score REAL DEFAULT 0.0,
+        controversy_score REAL DEFAULT 0.0,
+        hidden_gem_score REAL DEFAULT 0.0,
+        news_30d_count INTEGER DEFAULT 0,
+        controversy_news_count INTEGER DEFAULT 0,
+        recent_news_json TEXT,
         tier TEXT DEFAULT 'B',
         tier_title TEXT,
         weekly_stats_json TEXT,
@@ -73,9 +79,24 @@ def init_db():
         ("committee_role_label", "TEXT DEFAULT '위원'"),
         ("bipartisan_score", "REAL DEFAULT 0.0"),
         ("committee_score", "REAL DEFAULT 0.0"),
+        ("fandom_score", "REAL DEFAULT 0.0"),
+        ("controversy_score", "REAL DEFAULT 0.0"),
+        ("hidden_gem_score", "REAL DEFAULT 0.0"),
+        ("news_30d_count", "INTEGER DEFAULT 0"),
+        ("controversy_news_count", "INTEGER DEFAULT 0"),
+        ("recent_news_json", "TEXT"),
     ]:
         if col_name not in existing_cols:
             cursor.execute(f"ALTER TABLE members ADD COLUMN {col_name} {col_def}")
+
+    # 메타데이터 테이블 (최근 업데이트 시각 등)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
     
     # 토론 및 응원 댓글 테이블
     cursor.execute("""
@@ -99,7 +120,7 @@ def get_all_members(party: Optional[str] = None, sort_by: str = "total", search:
     conn = get_connection()
     cursor = conn.cursor()
     
-    # 정렬 컬럼 매핑 (v3.0 6대 핵심 축 + 응원순)
+    # 정렬 컬럼 매핑 (v3.1 6대 핵심 축 + 재미/화제성 3종 + 응원순)
     sort_column_map = {
         "total": "total_score DESC, passed_score DESC, voting_score DESC",
         "passed": "passed_score DESC, total_score DESC",
@@ -110,7 +131,10 @@ def get_all_members(party: Optional[str] = None, sort_by: str = "total", search:
         "attendance": "committee_score DESC, total_score DESC",
         "speech": "speech_score DESC, total_score DESC",
         "policy": "policy_score DESC, total_score DESC",
-        "cheer": "cheer_count DESC, total_score DESC"
+        "cheer": "cheer_count DESC, total_score DESC",
+        "fandom": "fandom_score DESC, cheer_count DESC, news_30d_count DESC",
+        "controversy": "controversy_score DESC, controversy_news_count DESC, news_30d_count DESC",
+        "hidden_gem": "hidden_gem_score DESC, total_score DESC"
     }
     order_clause = sort_column_map.get(sort_by, sort_column_map["total"])
     
@@ -145,7 +169,10 @@ def get_all_members(party: Optional[str] = None, sort_by: str = "total", search:
         "attendance": "committee_score",
         "speech": "speech_score",
         "policy": "policy_score",
-        "cheer": "cheer_count"
+        "cheer": "cheer_count",
+        "fandom": "fandom_score",
+        "controversy": "controversy_score",
+        "hidden_gem": "hidden_gem_score"
     }.get(sort_by, "total_score")
 
     score_counts = Counter(row[sort_key_attr] for row in rows)
@@ -172,6 +199,13 @@ def get_all_members(party: Optional[str] = None, sort_by: str = "total", search:
             item["keywords"] = json.loads(item["keywords_json"])
         else:
             item["keywords"] = ["#국회의원", "#입법활동", "#민생우선"]
+        if item.get("recent_news_json"):
+            news_items = json.loads(item["recent_news_json"])
+            item["recent_news_items"] = news_items
+            item["recent_news_titles"] = [n["title"] if isinstance(n, dict) else n for n in news_items]
+        else:
+            item["recent_news_items"] = []
+            item["recent_news_titles"] = []
         results.append(item)
         
     conn.close()
@@ -201,6 +235,13 @@ def get_member_by_id(member_id: str) -> Optional[Dict[str, Any]]:
         member["keywords"] = json.loads(member["keywords_json"])
     else:
         member["keywords"] = ["#국회의원", "#입법활동", "#민생우선"]
+    if member.get("recent_news_json"):
+        news_items = json.loads(member["recent_news_json"])
+        member["recent_news_items"] = news_items
+        member["recent_news_titles"] = [n["title"] if isinstance(n, dict) else n for n in news_items]
+    else:
+        member["recent_news_items"] = []
+        member["recent_news_titles"] = []
 
     # 14대 내부 공공 팩트 지표 요약 시트
     vb = ws.get("vote_breakdown") or {}
@@ -235,6 +276,8 @@ def get_member_by_id(member_id: str) -> Optional[Dict[str, Any]]:
         "seminar_hosted": bool(ws.get("seminar_hosted", False)),
         "interpellation_count": int(ws.get("interpellation_count", 0)),
         "media_mentions": int(member.get("media_mentions", 0)),
+        "news_30d_count": int(member.get("news_30d_count", ws.get("news_30d_count", 0))),
+        "controversy_news_count": int(member.get("controversy_news_count", ws.get("controversy_news_count", 0))),
     }
         
     # 전체 순위 계산
@@ -250,13 +293,68 @@ def get_member_by_id(member_id: str) -> Optional[Dict[str, Any]]:
     conn.close()
     return member
 
+def set_metadata(key: str, value: str):
+    """메타데이터 저장/갱신"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO metadata (key, value, updated_at)
+        VALUES (?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
+    """, (key, value))
+    conn.commit()
+    conn.close()
+
+
+def get_metadata(key: str, default: Optional[str] = None) -> Optional[str]:
+    """메타데이터 조회"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT value FROM metadata WHERE key = ?", (key,))
+        row = cursor.fetchone()
+        return row["value"] if row else default
+    except Exception:
+        return default
+    finally:
+        conn.close()
+
+
+def _refresh_fun_scores_in_conn(conn: sqlite3.Connection, member_id: str):
+    """응원/댓글 변동 시 total_score를 건드리지 않고 재미 지표만 실시간 재계산"""
+    from scoring import calculate_fun_metrics
+
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM members WHERE id = ?", (member_id,))
+    row = cursor.fetchone()
+    if not row:
+        return
+    m = dict(row)
+    m["weekly_stats"] = json.loads(m["weekly_stats_json"]) if m.get("weekly_stats_json") else {}
+
+    cursor.execute("SELECT stance, COUNT(*) as c FROM comments WHERE member_id = ? GROUP BY stance", (member_id,))
+    c_stats = {r["stance"]: r["c"] for r in cursor.fetchall()}
+
+    fun = calculate_fun_metrics(
+        m,
+        total_score=m["total_score"],
+        cheer_count=m["cheer_count"],
+        comment_stats=c_stats,
+    )
+    cursor.execute(
+        "UPDATE members SET fandom_score = ?, controversy_score = ?, hidden_gem_score = ? WHERE id = ?",
+        (fun["fandom_score"], fun["controversy_score"], fun["hidden_gem_score"], member_id),
+    )
+
+
 def cheer_member(member_id: str) -> int:
-    """국회의원 실시간 1클릭 응원 카운터 증가"""
+    """국회의원 실시간 1클릭 응원 카운터 증가 (팬덤 지수 실시간 반영, total_score 무영향)"""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("UPDATE members SET cheer_count = cheer_count + 1 WHERE id = ?", (member_id,))
+    _refresh_fun_scores_in_conn(conn, member_id)
     conn.commit()
-    
+
     cursor.execute("SELECT cheer_count FROM members WHERE id = ?", (member_id,))
     row = cursor.fetchone()
     new_count = row["cheer_count"] if row else 0
@@ -288,6 +386,7 @@ def add_comment(member_id: str, author: str, content: str, stance: str = "cheer"
         VALUES (?, ?, ?, ?, ?, 0)
     """, (member_id, author.strip() or "익명 시민", stance, content.strip(), created_at))
     new_id = cursor.lastrowid
+    _refresh_fun_scores_in_conn(conn, member_id)
     conn.commit()
     conn.close()
     
@@ -328,6 +427,17 @@ def get_summary_stats() -> Dict[str, Any]:
     party_counts["all"] = total_members
     party_counts["무소속/기타"] = etc_count
 
+    last_updated_at = None
+    try:
+        cursor.execute("SELECT value FROM metadata WHERE key = 'last_updated_at'")
+        meta_row = cursor.fetchone()
+        if meta_row:
+            last_updated_at = meta_row["value"]
+    except Exception:
+        pass
+    if not last_updated_at:
+        last_updated_at = datetime.now().strftime("%Y-%m-%d %H:%M KST")
+
     conn.close()
     return {
         "total_members": total_members,
@@ -336,4 +446,6 @@ def get_summary_stats() -> Dict[str, Any]:
         "avg_score": avg_score,
         "top_member": dict(top_member) if top_member else None,
         "party_counts": party_counts,
+        "last_updated_at": last_updated_at,
+        "update_schedule": "매주 월요일 06:00 KST 자동 동기화",
     }
