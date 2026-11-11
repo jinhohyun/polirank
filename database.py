@@ -43,7 +43,19 @@ def verify_password(password: str, stored_hash: str) -> bool:
         return False
 
 def get_connection():
-    conn = sqlite3.connect(DB_PATH)
+    target_db = DB_PATH
+    if os.environ.get("VERCEL"):
+        tmp_db = "/tmp/polirank.db"
+        if not os.path.exists(tmp_db) and os.path.exists(DB_PATH):
+            import shutil
+            try:
+                shutil.copy2(DB_PATH, tmp_db)
+            except Exception:
+                pass
+        if os.path.exists(tmp_db):
+            target_db = tmp_db
+
+    conn = sqlite3.connect(target_db, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 
