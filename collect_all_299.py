@@ -420,6 +420,26 @@ def parse_committee_role(job_res: Optional[str], mem_title: Optional[str]) -> Tu
     return "member", jr or "위원"
 
 
+def parse_staff_info(staff_str: Optional[str], secretary_str: Optional[str], secretary2_str: Optional[str]) -> Dict[str, Any]:
+    """STAFF(4급), SECRETARY(5급), SECRETARY2(6~9급 및 인턴) 파싱"""
+    def _clean_list(raw_str: Optional[str]) -> List[str]:
+        if not raw_str:
+            return []
+        return [x.strip() for x in re.split(r"[,;\n\r]+", str(raw_str)) if x.strip()]
+
+    advisors = _clean_list(staff_str)
+    secretaries = _clean_list(secretary_str)
+    assistants = _clean_list(secretary2_str)
+    total_count = len(advisors) + len(secretaries) + len(assistants)
+
+    return {
+        "total_count": total_count,
+        "advisors_4th": advisors,
+        "secretaries_5th": secretaries,
+        "assistants_6to9th": assistants,
+    }
+
+
 def parse_region_type(district: Optional[str]) -> str:
     """선거구 기반 지역 유형 분류"""
     d = (district or "").strip()
@@ -893,6 +913,8 @@ def build_all_members_dataset() -> Dict[str, Any]:
             "recent_bills": leg["recent_bills"],
         }
 
+        staff_info = parse_staff_info(m.get("STAFF"), m.get("SECRETARY"), m.get("SECRETARY2"))
+
         enriched_members.append({
             "id": f"mem_22_{mona}",
             "mona_cd": mona,
@@ -918,6 +940,11 @@ def build_all_members_dataset() -> Dict[str, Any]:
             "keywords": profile["keywords"],
             "media_mentions": media_mentions,
             "weekly_stats": weekly_stats,
+            "staff_info": staff_info,
+            "staff_total_count": staff_info["total_count"],
+            "staff_advisors_4th": staff_info["advisors_4th"],
+            "staff_secretaries_5th": staff_info["secretaries_5th"],
+            "staff_assistants_6to9th": staff_info["assistants_6to9th"],
         })
 
     # v3.4: 299명 전원 100% 고유 한마디(중복 제로) 자동 부여 및 검증

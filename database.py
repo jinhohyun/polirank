@@ -100,6 +100,10 @@ def init_db():
         recent_bills_json TEXT,
         is_verified_office INTEGER DEFAULT 0,
         office_notice TEXT DEFAULT '',
+        staff_total_count INTEGER DEFAULT 0,
+        staff_advisors_4th_json TEXT,
+        staff_secretaries_5th_json TEXT,
+        staff_assistants_6to9th_json TEXT,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """)
@@ -121,6 +125,10 @@ def init_db():
         ("recent_news_json", "TEXT"),
         ("is_verified_office", "INTEGER DEFAULT 0"),
         ("office_notice", "TEXT DEFAULT ''"),
+        ("staff_total_count", "INTEGER DEFAULT 0"),
+        ("staff_advisors_4th_json", "TEXT"),
+        ("staff_secretaries_5th_json", "TEXT"),
+        ("staff_assistants_6to9th_json", "TEXT"),
     ]:
         if col_name not in existing_cols:
             cursor.execute(f"ALTER TABLE members ADD COLUMN {col_name} {col_def}")
@@ -337,6 +345,16 @@ def get_all_members(party: Optional[str] = None, sort_by: str = "total", search:
             item["recent_news_titles"] = []
         item["is_verified_office"] = int(item.get("is_verified_office") or 0)
         item["office_notice"] = item.get("office_notice") or ""
+        advisors = json.loads(item["staff_advisors_4th_json"]) if item.get("staff_advisors_4th_json") else []
+        secretaries = json.loads(item["staff_secretaries_5th_json"]) if item.get("staff_secretaries_5th_json") else []
+        assistants = json.loads(item["staff_assistants_6to9th_json"]) if item.get("staff_assistants_6to9th_json") else []
+        tot_staff = int(item.get("staff_total_count") or (len(advisors) + len(secretaries) + len(assistants)))
+        item["staff_info"] = {
+            "total_count": tot_staff,
+            "advisors_4th": advisors,
+            "secretaries_5th": secretaries,
+            "assistants_6to9th": assistants,
+        }
         results.append(item)
         
     conn.close()
@@ -375,6 +393,17 @@ def get_member_by_id(member_id: str) -> Optional[Dict[str, Any]]:
         member["recent_news_titles"] = []
     member["is_verified_office"] = int(member.get("is_verified_office") or 0)
     member["office_notice"] = member.get("office_notice") or ""
+
+    m_adv = json.loads(member["staff_advisors_4th_json"]) if member.get("staff_advisors_4th_json") else []
+    m_sec = json.loads(member["staff_secretaries_5th_json"]) if member.get("staff_secretaries_5th_json") else []
+    m_ast = json.loads(member["staff_assistants_6to9th_json"]) if member.get("staff_assistants_6to9th_json") else []
+    m_tot = int(member.get("staff_total_count") or (len(m_adv) + len(m_sec) + len(m_ast)))
+    member["staff_info"] = {
+        "total_count": m_tot,
+        "advisors_4th": m_adv,
+        "secretaries_5th": m_sec,
+        "assistants_6to9th": m_ast,
+    }
 
     # 14대 내부 공공 팩트 지표 요약 시트
     vb = ws.get("vote_breakdown") or {}

@@ -588,11 +588,12 @@ function createMemberCardElement(member, displayRank, rankText, isTied) {
                         ? `<span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold verified-office-pill" title="공식 의원실 직접 인증"><i class="fa-solid fa-circle-check text-sky-500"></i>공식 인증</span>`
                         : ''}
                 </div>
-                <div class="flex items-center justify-center space-x-1.5">
+                <div class="flex items-center justify-center space-x-1.5 flex-wrap gap-y-0.5">
                     <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold text-white shadow-xs" style="background-color: ${member.party_color}">
                         ${member.party}
                     </span>
                     <span class="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[130px]">${member.district}</span>
+                    <span class="text-[10px] px-1.5 py-0.2 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-semibold border border-indigo-500/20" title="보좌진 총원"><i class="fa-solid fa-users text-[9px] mr-0.5"></i>${(member.staff_info && member.staff_info.total_count) || member.staff_total_count || 0}명</span>
                 </div>
             </div>
         </div>
@@ -949,6 +950,7 @@ async function openModal(memberId) {
 
         renderModalFactSheet14(member);
         renderModalNews(member);
+        renderModalStaffInfo(member);
 
         document.getElementById('modal-donation-account').textContent = member.donation_account || '선관위 정치후원금센터 참조';
         document.getElementById('modal-cheer-count').textContent = member.cheer_count;
@@ -974,6 +976,74 @@ async function openModal(memberId) {
         console.error('Failed to open modal', err);
         showToast('의원 정보를 불러오는 데 실패했습니다.', 'error');
     }
+}
+
+// Toggle Staff List Panel in Modal
+function toggleStaffList() {
+    const panel = document.getElementById('modal-staff-panel');
+    const chevron = document.getElementById('staff-chevron');
+    if (!panel) return;
+    
+    if (panel.classList.contains('hidden')) {
+        panel.classList.remove('hidden');
+        if (chevron) chevron.style.transform = 'rotate(180deg)';
+    } else {
+        panel.classList.add('hidden');
+        if (chevron) chevron.style.transform = 'rotate(0deg)';
+    }
+}
+
+// Render Staff Info in Modal
+function renderModalStaffInfo(member) {
+    const staffInfo = member.staff_info || {
+        total_count: member.staff_total_count || 0,
+        advisors_4th: member.staff_advisors_4th || [],
+        secretaries_5th: member.staff_secretaries_5th || [],
+        assistants_6to9th: member.staff_assistants_6to9th || []
+    };
+
+    const totCount = staffInfo.total_count || 0;
+    const advisors = staffInfo.advisors_4th || [];
+    const secretaries = staffInfo.secretaries_5th || [];
+    const assistants = staffInfo.assistants_6to9th || [];
+
+    const textElem = document.getElementById('modal-staff-count-text');
+    if (textElem) textElem.textContent = `보좌진 ${totCount}명`;
+
+    const totalTag = document.getElementById('modal-staff-total-tag');
+    if (totalTag) totalTag.textContent = `총 ${totCount}명`;
+
+    const advCount = document.getElementById('modal-staff-4th-count');
+    if (advCount) advCount.textContent = `(${advisors.length}명)`;
+    const advListElem = document.getElementById('modal-staff-4th-list');
+    if (advListElem) {
+        advListElem.innerHTML = advisors.length > 0
+            ? advisors.map(name => `<span class="px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 text-xs font-semibold">${name}</span>`).join(' ')
+            : '<span class="text-slate-400 text-xs italic">등록 정보 없음</span>';
+    }
+
+    const secCount = document.getElementById('modal-staff-5th-count');
+    if (secCount) secCount.textContent = `(${secretaries.length}명)`;
+    const secListElem = document.getElementById('modal-staff-5th-list');
+    if (secListElem) {
+        secListElem.innerHTML = secretaries.length > 0
+            ? secretaries.map(name => `<span class="px-2 py-0.5 rounded bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800/60 text-xs font-semibold">${name}</span>`).join(' ')
+            : '<span class="text-slate-400 text-xs italic">등록 정보 없음</span>';
+    }
+
+    const astCount = document.getElementById('modal-staff-6to9th-count');
+    if (astCount) astCount.textContent = `(${assistants.length}명)`;
+    const astListElem = document.getElementById('modal-staff-6to9th-list');
+    if (astListElem) {
+        astListElem.innerHTML = assistants.length > 0
+            ? assistants.map(name => `<span class="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700/60 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600/60 text-xs font-medium">${name}</span>`).join(' ')
+            : '<span class="text-slate-400 text-xs italic">등록 정보 없음</span>';
+    }
+
+    const panel = document.getElementById('modal-staff-panel');
+    const chevron = document.getElementById('staff-chevron');
+    if (panel) panel.classList.add('hidden');
+    if (chevron) chevron.style.transform = 'rotate(0deg)';
 }
 
 // Close Modal

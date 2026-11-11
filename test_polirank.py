@@ -723,6 +723,24 @@ class TestPoliRankV3(unittest.TestCase):
         self.assertEqual(dev_after["dev_bank_info"], "카카오뱅크 3333-01-9999999 (현진호)")
         print(f"[PASS] Weekly seed(preserve_user_data=True) lossless preservation verified: cheers={after_cheers}, comments={after_comments}, logs={after_logs}, verified={after_verified}, accounts={after_accounts}, feedbacks={after_feedbacks}")
 
+    def test_13_member_staff_info(self):
+        """국회의원 보좌진 정보(4급, 5급, 6~9급/인턴 및 총원) 수집/저장/API 검증"""
+        members = get_all_members()
+        self.assertGreater(len(members), 0)
+        
+        sample_mem = members[0]
+        self.assertIn("staff_info", sample_mem)
+        staff_info = sample_mem["staff_info"]
+        self.assertIn("total_count", staff_info)
+        self.assertIn("advisors_4th", staff_info)
+        self.assertIn("secretaries_5th", staff_info)
+        self.assertIn("assistants_6to9th", staff_info)
+        
+        res = self.client.get(f"/api/members/{sample_mem['id']}").json()
+        self.assertIn("staff_info", res)
+        self.assertEqual(res["staff_info"]["total_count"], staff_info["total_count"])
+        print(f"[PASS] Staff info parsing & API verification passed. Sample ({sample_mem['name']}): {res['staff_info']}")
+
 
 if __name__ == "__main__":
     unittest.main()

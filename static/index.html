@@ -380,6 +380,65 @@
                         <div id="modal-fun-badges" class="flex flex-wrap gap-1.5 pt-1">
                             <!-- Injected by app.js -->
                         </div>
+
+                        <!-- Staff Info Badge & Toggle Button -->
+                        <div class="flex flex-wrap items-center gap-2 pt-1.5">
+                            <span id="modal-staff-count-badge" class="px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 flex items-center gap-1.5">
+                                <i class="fa-solid fa-users text-indigo-500"></i>
+                                <span id="modal-staff-count-text">보좌진 0명</span>
+                            </span>
+                            <button id="modal-toggle-staff-btn" onclick="toggleStaffList()" class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-indigo-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors flex items-center gap-1.5 border border-slate-200 dark:border-slate-700">
+                                <i class="fa-solid fa-address-card text-indigo-500"></i>
+                                <span>보좌진 명단 보기</span>
+                                <i id="staff-chevron" class="fa-solid fa-chevron-down text-[10px] ml-0.5 transition-transform duration-200"></i>
+                            </button>
+                        </div>
+
+                        <!-- 보좌진 급수별 리스트 토글 패널 -->
+                        <div id="modal-staff-panel" class="hidden mt-2 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 text-xs space-y-3 shadow-inner">
+                            <div class="flex items-center justify-between pb-2 border-b border-slate-200/80 dark:border-slate-700/80">
+                                <h4 class="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-user-shield text-indigo-500"></i> 보좌진 현황 (급수별 명단)
+                                </h4>
+                                <span id="modal-staff-total-tag" class="text-[11px] text-slate-500 font-medium">총 0명</span>
+                            </div>
+                            
+                            <!-- 4급 보좌관 -->
+                            <div class="space-y-1">
+                                <div class="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300 text-[11px]">
+                                    <span class="px-1.5 py-0.5 rounded bg-indigo-600 text-white font-black text-[10px]">4급</span>
+                                    <span>보좌관</span>
+                                    <span id="modal-staff-4th-count" class="text-slate-400 font-normal text-[11px]">(0명)</span>
+                                </div>
+                                <div id="modal-staff-4th-list" class="flex flex-wrap gap-1.5 pl-1">
+                                    <!-- JS 동적 생성 -->
+                                </div>
+                            </div>
+                            
+                            <!-- 5급 비서관 -->
+                            <div class="space-y-1">
+                                <div class="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300 text-[11px]">
+                                    <span class="px-1.5 py-0.5 rounded bg-sky-600 text-white font-black text-[10px]">5급</span>
+                                    <span>비서관</span>
+                                    <span id="modal-staff-5th-count" class="text-slate-400 font-normal text-[11px]">(0명)</span>
+                                </div>
+                                <div id="modal-staff-5th-list" class="flex flex-wrap gap-1.5 pl-1">
+                                    <!-- JS 동적 생성 -->
+                                </div>
+                            </div>
+                            
+                            <!-- 6~9급 및 인턴 -->
+                            <div class="space-y-1">
+                                <div class="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300 text-[11px]">
+                                    <span class="px-1.5 py-0.5 rounded bg-slate-600 text-white font-black text-[10px]">6~9급 / 인턴</span>
+                                    <span>비서관·비서</span>
+                                    <span id="modal-staff-6to9th-count" class="text-slate-400 font-normal text-[11px]">(0명)</span>
+                                </div>
+                                <div id="modal-staff-6to9th-list" class="flex flex-wrap gap-1.5 pl-1">
+                                    <!-- JS 동적 생성 -->
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Total Score Display -->

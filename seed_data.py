@@ -411,6 +411,12 @@ def seed(preserve_user_data: bool = False):
         is_verified_office = int(existing_verified.get(m["id"], 0)) if preserve_user_data else 0
         office_notice = existing_notices.get(m["id"], "") if preserve_user_data else ""
 
+        staff_info = m.get("staff_info") or {}
+        staff_tot = int(m.get("staff_total_count") or staff_info.get("total_count") or 0)
+        staff_adv = m.get("staff_advisors_4th") or staff_info.get("advisors_4th") or []
+        staff_sec = m.get("staff_secretaries_5th") or staff_info.get("secretaries_5th") or []
+        staff_ast = m.get("staff_assistants_6to9th") or staff_info.get("assistants_6to9th") or []
+
         cursor.execute("""
             INSERT OR REPLACE INTO members (
                 id, mona_cd, name, hanja_name, party, party_color, district, region_type,
@@ -422,8 +428,9 @@ def seed(preserve_user_data: bool = False):
                 total_score, fandom_score, controversy_score, hidden_gem_score,
                 news_30d_count, controversy_news_count, recent_news_json,
                 tier, tier_title, weekly_stats_json, recent_bills_json,
-                is_verified_office, office_notice
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                is_verified_office, office_notice,
+                staff_total_count, staff_advisors_4th_json, staff_secretaries_5th_json, staff_assistants_6to9th_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             m["id"],
             mona_cd,
@@ -470,6 +477,10 @@ def seed(preserve_user_data: bool = False):
             json.dumps(recent_bills, ensure_ascii=False),
             is_verified_office,
             office_notice,
+            staff_tot,
+            json.dumps(staff_adv, ensure_ascii=False),
+            json.dumps(staff_sec, ensure_ascii=False),
+            json.dumps(staff_ast, ensure_ascii=False),
         ))
 
     conn.commit()
