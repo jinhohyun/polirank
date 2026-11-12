@@ -6,8 +6,13 @@ import os
 import json
 import random
 from datetime import datetime, timezone, timedelta
-from database import init_db, get_connection, set_metadata
-from scoring import calculate_member_scores, calculate_fun_metrics
+import sys
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+if CURRENT_DIR not in sys.path:
+    sys.path.insert(0, CURRENT_DIR)
+
+from polirank_mvp.database import init_db, get_connection, set_metadata
+from polirank_mvp.scoring import calculate_member_scores, calculate_fun_metrics
 
 ALL_SEED = os.path.abspath(os.path.join(os.path.dirname(__file__), "seed_data_all.json"))
 LOCAL_SEED = os.path.abspath(os.path.join(os.path.dirname(__file__), "seed_data.json"))

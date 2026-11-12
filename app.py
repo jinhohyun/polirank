@@ -20,35 +20,51 @@ CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 if CURRENT_DIR not in sys.path:
     sys.path.insert(0, CURRENT_DIR)
 
-from database import (
-    init_db,
-    get_all_members,
-    get_member_by_id,
-    record_cheer_with_guard,
-    get_cheered_member_ids,
-    get_comments,
-    add_comment,
-    get_summary_stats,
-    authenticate_office_account,
-    get_office_account_by_username,
-    issue_office_account,
-    toggle_member_verification,
-    update_office_notice,
-    list_office_accounts,
-    get_dev_support_settings,
-    update_dev_support_settings,
-    add_feedback,
-    list_feedbacks,
-    mark_feedback_status,
-)
-from avatar_generator import generate_caricature_svg
-from scoring import SCORING_METHODOLOGY
+import polirank_mvp.database as polirank_db
+
+init_db = polirank_db.init_db
+get_all_members = polirank_db.get_all_members
+get_member_by_id = polirank_db.get_member_by_id
+record_cheer_with_guard = polirank_db.record_cheer_with_guard
+get_cheered_member_ids = polirank_db.get_cheered_member_ids
+get_comments = polirank_db.get_comments
+add_comment = polirank_db.add_comment
+get_summary_stats = polirank_db.get_summary_stats
+authenticate_office_account = polirank_db.authenticate_office_account
+get_office_account_by_username = polirank_db.get_office_account_by_username
+issue_office_account = polirank_db.issue_office_account
+toggle_member_verification = polirank_db.toggle_member_verification
+update_office_notice = polirank_db.update_office_notice
+list_office_accounts = polirank_db.list_office_accounts
+get_dev_support_settings = polirank_db.get_dev_support_settings
+update_dev_support_settings = polirank_db.update_dev_support_settings
+add_feedback = polirank_db.add_feedback
+list_feedbacks = polirank_db.list_feedbacks
+mark_feedback_status = polirank_db.mark_feedback_status
+
+import polirank_mvp.scoring as polirank_scoring
+import polirank_mvp.avatar_generator as polirank_avatar
+
+SCORING_METHODOLOGY = polirank_scoring.SCORING_METHODOLOGY
+generate_caricature_svg = polirank_avatar.generate_caricature_svg
+
+from polirank_core_config import POLIRANK_CONFIG, PolirankScoringEngine
+from rank_core import create_ranking_app, BaseDatabaseManager
+
+# Rank Core 서브 앱 마운트 준비
+core_engine = PolirankScoringEngine(POLIRANK_CONFIG.weights)
+core_db_path = os.path.join(CURRENT_DIR, POLIRANK_CONFIG.db_filename)
+core_db = BaseDatabaseManager(core_db_path)
+core_app = create_ranking_app(POLIRANK_CONFIG, core_db, core_engine)
 
 app = FastAPI(
     title="PoliRank API",
-    description="제22대 국회의원 299인 6대 핵심 축 · 14대 실제 공공 팩트 + 공식 의원실 소통 & 후원/의견 API",
+    description="제22대 국회의원 299인 6대 핵심 축 · 14대 실제 공공 팩트 + 공식 의원실 소통 & 후원/의견 API (rank_core 기반)",
     version="3.4.0"
 )
+
+# Core API Mount
+app.mount("/core", core_app)
 
 VID_COOKIE_NAME = "polirank_vid"
 VID_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
@@ -254,8 +270,9 @@ def _check_rate_limit(bucket: dict[str, float], key: str, cooldown_sec: float = 
             bucket.pop(k, None)
     return None
 
-from seed_data import seed
-from database import get_connection
+import polirank_mvp.seed_data as polirank_seed
+seed = polirank_seed.seed
+get_connection = polirank_db.get_connection
 
 @app.on_event("startup")
 def startup_event():
