@@ -4,18 +4,22 @@ from typing import Optional, List, Dict, Any
 from .config import PlatformConfig
 from .scoring import BaseScoringEngine, WeightedScoringEngine
 from .database import BaseDatabaseManager
+from .i18n import I18nManager
 
 def create_ranking_app(
     config: PlatformConfig,
     db: BaseDatabaseManager,
-    scoring_engine: Optional[BaseScoringEngine] = None
+    scoring_engine: Optional[BaseScoringEngine] = None,
+    i18n_manager: Optional[I18nManager] = None
 ) -> FastAPI:
     """
-    설정과 데이터베이스, 스코어링 엔진을 주입받아
+    설정과 데이터베이스, 스코어링 엔진, i18n 매니저를 주입받아
     완전한 REST API 웹 서버 애플리케이션을 생성하는 팩토리 함수
     """
     if scoring_engine is None:
         scoring_engine = WeightedScoringEngine(config.weights)
+    if i18n_manager is None:
+        i18n_manager = I18nManager()
 
     app = FastAPI(
         title=config.platform_title,
@@ -36,18 +40,30 @@ def create_ranking_app(
         """플랫폼 화이트라벨 설정 및 정보 반환"""
         return config.to_dict()
 
+    @app.get("/api/i18n")
+    def get_i18n(lang: str = "ko"):
+        """다국어 딕셔너리 반환"""
+        return {
+            "lang": lang,
+            "translations": i18n_manager.translations.get(lang.lower(), i18n_manager.translations["ko"])
+        }
+
     @app.get("/api/rankings")
     def get_rankings(
         category: Optional[str] = None,
         search: Optional[str] = None,
         sort_by: str = "rank",
-        limit: int = 100
+        limit: int = 100,
+        lang: str = "ko"
     ):
         """전체 순위 리스트 및 필터링 검색"""
         entities = db.get_all_entities()
         
         # 스코어링 계산 및 랭킹 정렬
         ranked_entities = scoring_engine.rank_entities(entities)
+
+        # i18n 적용
+        ranked_entities = [i18n_manager.resolve_entity_language(e, lang) for e in ranked_entities]
 
         # 필터링
         if category and category.lower() != "all":
@@ -64,6 +80,7 @@ def create_ranking_app(
 
         return {
             "platform": config.platform_id,
+            "lang": lang,
             "total_count": len(ranked_entities),
             "data": ranked_entities[:limit]
         }

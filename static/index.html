@@ -75,6 +75,14 @@
 
                 <!-- Header Actions -->
                 <div class="flex items-center space-x-1.5 sm:space-x-2">
+                    <!-- Language Selector (i18n) -->
+                    <div class="relative inline-block">
+                        <select id="lang-select" onchange="toggleLanguage(this.value)" class="px-2 py-1.5 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 cursor-pointer outline-none">
+                            <option value="ko">🌐 한국어</option>
+                            <option value="en">🌐 English</option>
+                        </select>
+                    </div>
+
                     <!-- Dedicated Methodology Page Link -->
                     <a href="/methodology" class="inline-flex items-center space-x-1 px-2.5 py-2 rounded-xl text-xs font-semibold bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 hover:bg-sky-100 dark:hover:bg-sky-900/60 transition-all border border-sky-200 dark:border-sky-900/50 whitespace-nowrap">
                         <span>📐</span>

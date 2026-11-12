@@ -4,8 +4,22 @@
 
 // Global State
 const PAGE_SIZE = 36;
+let currentLang = localStorage.getItem('polirank_lang') || 'ko';
 let allMembers = [];
 let filteredMembers = [];
+
+function toggleLanguage(lang) {
+    currentLang = lang;
+    localStorage.setItem('polirank_lang', lang);
+    const select = document.getElementById('lang-select');
+    if (select) select.value = lang;
+    filterAndRenderMembers();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const select = document.getElementById('lang-select');
+    if (select) select.value = currentLang;
+});
 let displayedCount = PAGE_SIZE;
 let renderedCount = 0;
 let showAllMode = false;

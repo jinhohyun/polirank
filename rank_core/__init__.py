@@ -10,6 +10,7 @@ from .config import PlatformConfig, ScoringWeightConfig
 from .scoring import BaseScoringEngine, WeightedScoringEngine
 from .database import BaseDatabaseManager
 from .factory import create_ranking_app
+from .i18n import I18nManager
 
 __all__ = [
     "PlatformConfig",
@@ -18,4 +19,5 @@ __all__ = [
     "WeightedScoringEngine",
     "BaseDatabaseManager",
     "create_ranking_app",
+    "I18nManager",
 ]

@@ -87,6 +87,11 @@ class TestRankCore(unittest.TestCase):
         self.assertEqual(res_vote.status_code, 200)
         self.assertEqual(res_vote.json()["votes"]["up"], 1)
 
+        # 4. i18n API 테스트
+        res_i18n = client.get("/api/i18n?lang=en")
+        self.assertEqual(res_i18n.status_code, 200)
+        self.assertEqual(res_i18n.json()["translations"]["rank"], "Rank")
+
 
 if __name__ == "__main__":
     unittest.main()
