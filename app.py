@@ -270,7 +270,7 @@ def _check_rate_limit(bucket: dict[str, float], key: str, cooldown_sec: float = 
             bucket.pop(k, None)
     return None
 
-import polirank_mvp.seed_data as polirank_seed
+import seed_data as polirank_seed
 seed = polirank_seed.seed
 get_connection = polirank_db.get_connection
 
