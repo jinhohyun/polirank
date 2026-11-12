@@ -13,12 +13,29 @@ class BaseDatabaseManager:
         self._init_db()
 
     def get_connection(self):
-        conn = sqlite3.connect(self.db_path)
+        target_path = self.db_path
+        if os.environ.get("VERCEL"):
+            db_name = os.path.basename(self.db_path)
+            tmp_path = os.path.join("/tmp", db_name)
+            if not os.path.exists(tmp_path) and os.path.exists(self.db_path):
+                import shutil
+                try:
+                    shutil.copy2(self.db_path, tmp_path)
+                except Exception:
+                    pass
+            if os.path.exists(tmp_path):
+                target_path = tmp_path
+
+        os.makedirs(os.path.dirname(os.path.abspath(target_path)), exist_ok=True)
+        conn = sqlite3.connect(target_path)
         conn.row_factory = sqlite3.Row
         return conn
 
     def _init_db(self):
-        os.makedirs(os.path.dirname(os.path.abspath(self.db_path)), exist_ok=True)
+        try:
+            os.makedirs(os.path.dirname(os.path.abspath(self.db_path)), exist_ok=True)
+        except Exception:
+            pass
         with self.get_connection() as conn:
             cursor = conn.cursor()
             # 1. 엔티티 메인 테이블 (공통 필드 + JSON extra_data)
