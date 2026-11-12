@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request, Query
+from fastapi import FastAPI, HTTPException, Request, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional, List, Dict, Any
 from .config import PlatformConfig
@@ -86,7 +86,7 @@ def create_ranking_app(
         }
 
     @app.post("/api/custom-rankings")
-    def calculate_custom_rankings(custom_weights: Dict[str, float], limit: int = 100, lang: str = "ko"):
+    def calculate_custom_rankings(custom_weights: Dict[str, float] = Body(...), limit: int = 100, lang: str = "ko"):
         """사용자 정의 가중치 기반 실시간 재산출 랭킹 (레드팀 편향성 시비 해소용)"""
         entities = db.get_all_entities()
         custom_engine = WeightedScoringEngine(ScoringWeightConfig(metrics=custom_weights))
