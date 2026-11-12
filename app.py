@@ -20,7 +20,16 @@ CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 if CURRENT_DIR not in sys.path:
     sys.path.insert(0, CURRENT_DIR)
 
-import polirank_mvp.database as polirank_db
+try:
+    import polirank_mvp.database as polirank_db
+    import polirank_mvp.scoring as polirank_scoring
+    import polirank_mvp.avatar_generator as polirank_avatar
+    import polirank_mvp.seed_data as polirank_seed
+except ImportError:
+    import database as polirank_db
+    import scoring as polirank_scoring
+    import avatar_generator as polirank_avatar
+    import seed_data as polirank_seed
 
 init_db = polirank_db.init_db
 get_all_members = polirank_db.get_all_members
@@ -41,9 +50,6 @@ update_dev_support_settings = polirank_db.update_dev_support_settings
 add_feedback = polirank_db.add_feedback
 list_feedbacks = polirank_db.list_feedbacks
 mark_feedback_status = polirank_db.mark_feedback_status
-
-import polirank_mvp.scoring as polirank_scoring
-import polirank_mvp.avatar_generator as polirank_avatar
 
 SCORING_METHODOLOGY = polirank_scoring.SCORING_METHODOLOGY
 generate_caricature_svg = polirank_avatar.generate_caricature_svg
