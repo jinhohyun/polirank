@@ -85,6 +85,20 @@ def create_ranking_app(
             "data": ranked_entities[:limit]
         }
 
+    @app.post("/api/custom-rankings")
+    def calculate_custom_rankings(custom_weights: Dict[str, float], limit: int = 100, lang: str = "ko"):
+        """사용자 정의 가중치 기반 실시간 재산출 랭킹 (레드팀 편향성 시비 해소용)"""
+        entities = db.get_all_entities()
+        custom_engine = WeightedScoringEngine(ScoringWeightConfig(metrics=custom_weights))
+        ranked_entities = custom_engine.rank_entities(entities)
+        ranked_entities = [i18n_manager.resolve_entity_language(e, lang) for e in ranked_entities]
+        return {
+            "platform": config.platform_id,
+            "custom_weights": custom_weights,
+            "total_count": len(ranked_entities),
+            "data": ranked_entities[:limit]
+        }
+
     @app.get("/api/entity/{entity_id}")
     def get_entity_detail(entity_id: str):
         """특정 엔티티 상세 정보 및 투표 수치"""

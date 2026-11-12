@@ -2263,3 +2263,49 @@ function showToast(message, type = 'info') {
         setTimeout(() => toast.remove(), 300);
     }, 3500);
 }
+
+function openCustomWeightModal() {
+    const modal = document.getElementById('custom-weight-modal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeCustomWeightModal() {
+    const modal = document.getElementById('custom-weight-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function applyCustomWeights() {
+    const wLeg = parseFloat(document.getElementById('w-leg').value) / 100;
+    const wAtt = parseFloat(document.getElementById('w-att').value) / 100;
+    const wNews = parseFloat(document.getElementById('w-news').value) / 100;
+    const wCheer = parseFloat(document.getElementById('w-cheer').value) / 100;
+
+    const weightsPayload = {
+        "legislative_score": wLeg,
+        "attendance_score": wAtt,
+        "news_buzz_score": wNews,
+        "public_cheer_score": wCheer
+    };
+
+    try {
+        const resp = await fetch(`/core/api/custom-rankings?lang=${currentLang}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(weightsPayload)
+        });
+        if (resp.ok) {
+            const data = await resp.json();
+            if (data && data.data) {
+                data.data.forEach(updated => {
+                    const matched = allMembers.find(m => m.id === updated.id);
+                    if (matched) matched.total_score = updated.total_score;
+                });
+                closeCustomWeightModal();
+                filterAndRenderMembers();
+                alert('✨ 나만의 맞춤형 가중치가 즉시 적용되었습니다!');
+            }
+        }
+    } catch (err) {
+        console.error('Custom ranking error', err);
+    }
+}

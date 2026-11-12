@@ -83,6 +83,12 @@
                         </select>
                     </div>
 
+                    <!-- Custom Weight Slider Button (Red Team Defense) -->
+                    <button onclick="openCustomWeightModal()" class="inline-flex items-center space-x-1 px-2.5 py-2 rounded-xl text-xs font-bold bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 transition-all border border-purple-200 dark:border-purple-800/50 whitespace-nowrap" title="내가 정하는 맞춤형 가중치 랭킹">
+                        <span>⚙️</span>
+                        <span class="hidden md:inline">나만의 가중치</span>
+                    </button>
+
                     <!-- Dedicated Methodology Page Link -->
                     <a href="/methodology" class="inline-flex items-center space-x-1 px-2.5 py-2 rounded-xl text-xs font-semibold bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 hover:bg-sky-100 dark:hover:bg-sky-900/60 transition-all border border-sky-200 dark:border-sky-900/50 whitespace-nowrap">
                         <span>📐</span>
@@ -992,5 +998,55 @@
 
     <!-- Frontend App Script -->
     <script src="/static/app.js"></script>
+    <!-- Custom Weight Modal (Red Team Alignment) -->
+    <div id="custom-weight-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm hidden">
+        <div class="glass-card max-w-lg w-full rounded-3xl p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+                <div class="flex items-center space-x-2">
+                    <span class="text-xl">⚙️</span>
+                    <h3 class="text-lg font-black text-slate-900 dark:text-white">나만의 맞춤형 의정 가중치</h3>
+                </div>
+                <button onclick="closeCustomWeightModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-white text-xl font-bold">&times;</button>
+            </div>
+            <p class="text-xs text-slate-500 dark:text-slate-400">내가 중요하게 생각하는 의정 항목의 가중치를 직접 조율하여 나만의 국회의원 랭킹을 즉시 산출해보세요.</p>
+            
+            <div class="space-y-3 text-xs font-semibold">
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <span>📜 입법 활동 (<span id="w-leg-val">25</span>%)</span>
+                    </div>
+                    <input type="range" id="w-leg" min="0" max="100" value="25" oninput="document.getElementById('w-leg-val').innerText=this.value" class="w-full accent-purple-600">
+                </div>
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <span>🗳️ 본회의/출석 (<span id="w-att-val">20</span>%)</span>
+                    </div>
+                    <input type="range" id="w-att" min="0" max="100" value="20" oninput="document.getElementById('w-att-val').innerText=this.value" class="w-full accent-purple-600">
+                </div>
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <span>📰 언론 버즈/노출 (<span id="w-news-val">20</span>%)</span>
+                    </div>
+                    <input type="range" id="w-news" min="0" max="100" value="20" oninput="document.getElementById('w-news-val').innerText=this.value" class="w-full accent-purple-600">
+                </div>
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <span>💖 국민 응원 (<span id="w-cheer-val">15</span>%)</span>
+                    </div>
+                    <input type="range" id="w-cheer" min="0" max="100" value="15" oninput="document.getElementById('w-cheer-val').innerText=this.value" class="w-full accent-purple-600">
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-2 pt-2">
+                <button onclick="applyCustomWeights()" class="flex-1 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition-all shadow-md">
+                    ✨ 나만의 랭킹 즉시 적용
+                </button>
+                <button onclick="closeCustomWeightModal()" class="py-2.5 px-4 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs">
+                    취소
+                </button>
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>

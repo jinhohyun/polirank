@@ -28,6 +28,7 @@ class PlatformConfig:
     theme_primary_color: str = "#1E40AF"  # 대표 메인 컬러
     theme_secondary_color: str = "#3B82F6"
     db_filename: str = "app.db"
+    election_safe_mode: bool = False      # 선거 기간 여론조사/순위 규제 대응 세이프 모드
     weights: ScoringWeightConfig = field(default_factory=ScoringWeightConfig)
     custom_labels: Dict[str, str] = field(default_factory=dict)
     extra_features: Dict[str, bool] = field(default_factory=lambda: {
