@@ -765,3 +765,32 @@ def create_comment(member_id: str, payload: CommentCreate, request: Request):
         "status": "success",
         "comment": new_comment
     }
+
+class CustomWeightPayload(BaseModel):
+    legislative_score: float = 0.25
+    attendance_score: float = 0.20
+    news_buzz_score: float = 0.20
+    public_cheer_score: float = 0.15
+
+@app.post("/api/custom-rankings")
+def calculate_polirank_custom_rankings(payload: CustomWeightPayload, lang: str = "ko"):
+    members = get_all_members()
+    total_weight = payload.legislative_score + payload.attendance_score + payload.news_buzz_score + payload.public_cheer_score
+    if total_weight <= 0:
+        total_weight = 1.0
+
+    scored = []
+    for m in members:
+        m_dict = dict(m)
+        leg = float(m_dict.get("legislation_score") or m_dict.get("passed_score") or 50.0)
+        att = float(m_dict.get("attendance_score") or 50.0)
+        news = float(m_dict.get("news_buzz_score") or 50.0)
+        cheer = float(m_dict.get("cheer_count") or 0.0)
+        cheer_score = min(100.0, cheer * 2.0)
+
+        custom_score = (leg * payload.legislative_score + att * payload.attendance_score + news * payload.news_buzz_score + cheer_score * payload.public_cheer_score) / total_weight
+        m_dict["total_score"] = round(custom_score, 1)
+        scored.append(m_dict)
+
+    scored.sort(key=lambda x: x["total_score"], reverse=True)
+    return {"status": "success", "data": scored}

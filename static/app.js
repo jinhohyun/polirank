@@ -2288,7 +2288,7 @@ async function applyCustomWeights() {
     };
 
     try {
-        const resp = await fetch(`/core/api/custom-rankings?lang=${currentLang}`, {
+        const resp = await fetch(`/api/custom-rankings?lang=${currentLang}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(weightsPayload)
