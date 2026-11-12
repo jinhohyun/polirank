@@ -8,17 +8,135 @@ let currentLang = localStorage.getItem('polirank_lang') || 'ko';
 let allMembers = [];
 let filteredMembers = [];
 
+const POLIRANK_I18N = {
+    ko: {
+        title: "PoliRank (폴리랭크)",
+        subtitle: "제22대 국회 6대 핵심 축 · 14대 공공 팩트 + 화제성 랭킹",
+        search_placeholder: "의원명, 정당, 지역구, 키워드 검색...",
+        all_parties: "전체 정당",
+        sort_total: "🏆 종합 PoliScore",
+        sort_passed: "🎯 입법 성과",
+        sort_voting: "🗳️ 본회의 표결",
+        sort_legislation: "📜 입법 발의",
+        sort_bipartisan: "🤝 초당적 협치",
+        sort_committee: "⚖️ 위원회 활동",
+        sort_fandom: "❤️ 팬덤 지수",
+        sort_controversy: "🔥 논란 온도",
+        sort_cheer: "💖 응원수",
+        unit_point: "점",
+        unit_count: "명",
+        unit_votes: "표",
+        cheer_button: "응원하기",
+        cheered: "응원 완료",
+        flip_card: "📊 6대 지표 보기",
+        flip_back: "👤 기본 프로필",
+        view_details: "상세보기",
+        load_more: "👇 다음 의원 더 보기",
+        show_all: "전체 보기",
+        no_results: "조건에 맞는 국회의원이 없습니다.",
+        reset_search: "검색 초기화",
+        methodology: "산출방식",
+        dev_support: "개발자 후원",
+        send_feedback: "의견 보내기",
+        member_unit: "인",
+        last_updated: "매주 월 06:00"
+    },
+    en: {
+        title: "PoliRank",
+        subtitle: "22nd National Assembly - 6 Core Pillars & Public Fact Ranking",
+        search_placeholder: "Search MP name, party, district, keyword...",
+        all_parties: "All Parties",
+        sort_total: "🏆 Overall PoliScore",
+        sort_passed: "🎯 Legislative Output",
+        sort_voting: "🗳️ Plenary Voting",
+        sort_legislation: "📜 Bills Sponsored",
+        sort_bipartisan: "🤝 Bipartisan Support",
+        sort_committee: "⚖️ Committee Activity",
+        sort_fandom: "❤️ Fandom Index",
+        sort_controversy: "🔥 Controversy Temp",
+        sort_cheer: "💖 Cheer Count",
+        unit_point: "pts",
+        unit_count: "MPs",
+        unit_votes: "votes",
+        cheer_button: "Cheer (Like)",
+        cheered: "Cheered",
+        flip_card: "📊 6 Indicators",
+        flip_back: "👤 Profile",
+        view_details: "Details",
+        load_more: "👇 Load More MPs",
+        show_all: "Show All",
+        no_results: "No National Assembly Members found matching criteria.",
+        reset_search: "Reset Search",
+        methodology: "Methodology",
+        dev_support: "Sponsor Dev",
+        send_feedback: "Feedback",
+        member_unit: "MPs",
+        last_updated: "Mon 06:00 KST"
+    }
+};
+
+const PARTY_TRANSLATIONS = {
+    "더불어민주당": { en: "Democratic Party" },
+    "국민의힘": { en: "People Power Party" },
+    "조국혁신당": { en: "Rebuilding Korea Party" },
+    "개혁신당": { en: "Reform Party" },
+    "진보당": { en: "Progressive Party" },
+    "기본소득당": { en: "Basic Income Party" },
+    "사회민주당": { en: "Social Democratic Party" },
+    "무소속": { en: "Independent" },
+    "무소속/기타": { en: "Independent / Other" }
+};
+
+function t(key) {
+    const dict = POLIRANK_I18N[currentLang] || POLIRANK_I18N.ko;
+    return dict[key] || key;
+}
+
+function getPartyDisplayName(partyName) {
+    if (currentLang === 'en' && PARTY_TRANSLATIONS[partyName]) {
+        return PARTY_TRANSLATIONS[partyName].en;
+    }
+    return partyName;
+}
+
+function getMemberDisplayName(member) {
+    if (currentLang === 'en' && member.name_en) {
+        return member.name_en;
+    }
+    return member.name;
+}
+
+function updateUILabels() {
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) searchInput.placeholder = t('search_placeholder');
+
+    const headerUpdated = document.getElementById('header-last-updated');
+    if (headerUpdated) headerUpdated.textContent = t('last_updated');
+
+    const partySelect = document.getElementById('filter-party');
+    if (partySelect) {
+        for (let opt of partySelect.options) {
+            if (opt.value === 'all') opt.text = t('all_parties');
+            else if (PARTY_TRANSLATIONS[opt.value]) {
+                opt.text = getPartyDisplayName(opt.value);
+            }
+        }
+    }
+}
+
 function toggleLanguage(lang) {
     currentLang = lang;
     localStorage.setItem('polirank_lang', lang);
     const select = document.getElementById('lang-select');
     if (select) select.value = lang;
+    updateUILabels();
     filterAndRenderMembers();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
     const select = document.getElementById('lang-select');
     if (select) select.value = currentLang;
+    updateUILabels();
 });
 let displayedCount = PAGE_SIZE;
 let renderedCount = 0;
@@ -595,19 +713,19 @@ function createMemberCardElement(member, displayRank, rankText, isTied) {
             <!-- Member Identity -->
             <div class="mt-2 space-y-0.5">
                 <div class="flex flex-wrap items-center justify-center gap-1">
-                    <h3 class="text-lg font-black text-slate-900 dark:text-white tracking-tight group-hover:text-sky-500 transition-colors">${member.name}</h3>
-                    <span class="text-xs text-slate-400">${member.hanja_name || ''}</span>
-                    <span class="text-[11px] font-semibold text-slate-400">(${member.terms}선)</span>
+                    <h3 class="text-lg font-black text-slate-900 dark:text-white tracking-tight group-hover:text-sky-500 transition-colors">${getMemberDisplayName(member)}</h3>
+                    <span class="text-xs text-slate-400">${currentLang === 'ko' ? (member.hanja_name || '') : ''}</span>
+                    <span class="text-[11px] font-semibold text-slate-400">(${currentLang === 'en' ? `${member.terms} Term` : `${member.terms}선`})</span>
                     ${Number(member.is_verified_office) === 1
-                        ? `<span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold verified-office-pill" title="공식 의원실 직접 인증"><i class="fa-solid fa-circle-check text-sky-500"></i>공식 인증</span>`
+                        ? `<span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold verified-office-pill" title="공식 의원실 직접 인증"><i class="fa-solid fa-circle-check text-sky-500"></i>${currentLang === 'en' ? 'Verified' : '공식 인증'}</span>`
                         : ''}
                 </div>
                 <div class="flex items-center justify-center space-x-1.5 flex-wrap gap-y-0.5">
                     <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold text-white shadow-xs" style="background-color: ${member.party_color}">
-                        ${member.party}
+                        ${getPartyDisplayName(member.party)}
                     </span>
-                    <span class="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[130px]">${member.district}</span>
-                    <span class="text-[10px] px-1.5 py-0.2 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-semibold border border-indigo-500/20" title="보좌진 총원"><i class="fa-solid fa-users text-[9px] mr-0.5"></i>${(member.staff_info && member.staff_info.total_count) || member.staff_total_count || 0}명</span>
+                    <span class="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[130px]">${(currentLang === 'en' && member.district_en) ? member.district_en : member.district}</span>
+                    <span class="text-[10px] px-1.5 py-0.2 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-semibold border border-indigo-500/20" title="보좌진 총원"><i class="fa-solid fa-users text-[9px] mr-0.5"></i>${(member.staff_info && member.staff_info.total_count) || member.staff_total_count || 0}${currentLang === 'en' ? ' Staff' : '명'}</span>
                 </div>
             </div>
         </div>
@@ -736,8 +854,8 @@ function getCardCheerButtonConfig(memberId, count) {
         ? 'cheer-btn flex-1 py-1.5 px-2 rounded-xl text-xs font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700/60 transition-all flex items-center justify-center space-x-1 relative'
         : 'cheer-btn flex-1 py-1.5 px-2 rounded-xl text-xs font-bold bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-900/40 transition-all flex items-center justify-center space-x-1 relative';
     const innerHTML = isCheered
-        ? `<span>💖</span><span>응원완료</span><span class="cheer-label-${memberId}">${count}</span>`
-        : `<i class="fa-solid fa-heart text-[11px]"></i><span class="cheer-label-${memberId}">${count}</span>`;
+        ? `<span>💖</span><span>${t('cheered')}</span><span class="cheer-label-${memberId}">${count}</span>`
+        : `<i class="fa-solid fa-heart text-[11px]"></i><span>${t('cheer_button')}</span><span class="cheer-label-${memberId}">${count}</span>`;
     return { isCheered, className, innerHTML };
 }
 
