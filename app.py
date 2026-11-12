@@ -20,16 +20,10 @@ CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 if CURRENT_DIR not in sys.path:
     sys.path.insert(0, CURRENT_DIR)
 
-try:
-    import polirank_mvp.database as polirank_db
-    import polirank_mvp.scoring as polirank_scoring
-    import polirank_mvp.avatar_generator as polirank_avatar
-    import polirank_mvp.seed_data as polirank_seed
-except ImportError:
-    import database as polirank_db
-    import scoring as polirank_scoring
-    import avatar_generator as polirank_avatar
-    import seed_data as polirank_seed
+import database as polirank_db
+import scoring as polirank_scoring
+import avatar_generator as polirank_avatar
+import seed_data as polirank_seed
 
 init_db = polirank_db.init_db
 get_all_members = polirank_db.get_all_members
