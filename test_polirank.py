@@ -11,6 +11,14 @@ if CURRENT_DIR not in sys.path:
     sys.path.insert(0, CURRENT_DIR)
 
 import database as db_module
+
+# v3.5: 테스트가 저장소의 polirank.db를 건드리지 않도록 import 시점에 임시 DB로 전환하고,
+# 운영자 계정은 환경변수로만 생성되므로 테스트용 비밀번호를 주입합니다.
+_TEST_TMP_DIR = tempfile.TemporaryDirectory()
+db_module.DB_PATH = os.path.join(_TEST_TMP_DIR.name, "test_polirank_import.db")
+TEST_ADMIN_PASSWORD = "test_admin_pw_v35_local_only"
+os.environ.setdefault("POLIRANK_ADMIN_PASSWORD", TEST_ADMIN_PASSWORD)
+
 from database import init_db, get_all_members, get_connection
 from seed_data import seed
 from scoring import calculate_member_scores, calculate_fun_metrics
@@ -426,7 +434,7 @@ class TestPoliRankV3(unittest.TestCase):
 
         # 2) 운영자 로그인 & 의원실 계정 발급
         admin_client = TestClient(app)
-        admin_pw = os.environ.get("POLIRANK_ADMIN_PASSWORD") or "polirank_admin_2026!"
+        admin_pw = os.environ.get("POLIRANK_ADMIN_PASSWORD") or TEST_ADMIN_PASSWORD
         bad_login = admin_client.post("/api/office/login", json={"username": "admin", "password": "wrong_password"})
         self.assertEqual(bad_login.status_code, 401)
 
@@ -644,7 +652,7 @@ class TestPoliRankV3(unittest.TestCase):
 
         # 4) 관리자 로그인 -> 의견 열람 & 확인완료 처리 + 개발자 후원 정보 실시간 업데이트
         admin_client = TestClient(app)
-        admin_pw = os.environ.get("POLIRANK_ADMIN_PASSWORD") or "polirank_admin_2026!"
+        admin_pw = os.environ.get("POLIRANK_ADMIN_PASSWORD") or TEST_ADMIN_PASSWORD
         self.assertEqual(
             admin_client.post("/api/office/login", json={"username": "admin", "password": admin_pw}).status_code,
             200,
@@ -740,6 +748,149 @@ class TestPoliRankV3(unittest.TestCase):
         self.assertIn("staff_info", res)
         self.assertEqual(res["staff_info"]["total_count"], staff_info["total_count"])
         print(f"[PASS] Staff info parsing & API verification passed. Sample ({sample_mem['name']}): {res['staff_info']}")
+
+    def test_14_security_no_default_admin_and_no_fake_donation_accounts(self):
+        """v3.5 보안 수정 검증: ① 하드코딩 기본 관리자 비밀번호·세션키 미사용 ② 임시(가짜) 후원계좌 미노출"""
+        import hashlib
+        import hmac
+        import base64
+        import json as json_module
+
+        # 1) 공개 저장소에 노출된 구 기본 비밀번호로는 관리자 로그인 불가
+        legacy_client = TestClient(app)
+        legacy_login = legacy_client.post(
+            "/api/office/login",
+            json={"username": "admin", "password": "polirank_admin_2026!"},
+        )
+        self.assertEqual(legacy_login.status_code, 401)
+        legacy_client.close()
+
+        # 2) 구 기본값에서 파생한 서명키로 만든 위조 세션 쿠키는 관리자 API에서 거부
+        forged_secret = hashlib.sha256(b"polirank_admin_2026!|polirank-v33-session-secret").hexdigest()
+        payload = {
+            "u": "admin",
+            "r": "admin",
+            "m": None,
+            "o": "PoliRank 운영본부",
+            "exp": 9999999999,
+        }
+        payload_b64 = base64.urlsafe_b64encode(
+            json_module.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        ).decode("ascii")
+        forged_sig = hmac.new(forged_secret.encode("utf-8"), payload_b64.encode("ascii"), hashlib.sha256).hexdigest()
+        forged_client = TestClient(app)
+        forged_client.cookies.set("polirank_office_session", f"{payload_b64}.{forged_sig}")
+        self.assertEqual(forged_client.get("/api/admin/feedbacks").status_code, 401)
+        self.assertEqual(forged_client.get("/api/admin/office-accounts").status_code, 401)
+        forged_client.close()
+
+        # 3) 소스에 가짜 후원계좌 생성 코드가 남아 있지 않음
+        with open(os.path.join(CURRENT_DIR, "seed_data.py"), encoding="utf-8") as fp:
+            seed_src = fp.read()
+        self.assertNotIn("결정론적 공식 후원계좌", seed_src)
+        self.assertNotIn("hashlib.md5", seed_src)
+
+        # 4) 모든 의원의 후원계좌는 빈 값이며, API 응답에도 계좌 형태 문자열이 없음
+        conn = get_connection()
+        rows = conn.execute(
+            "SELECT id, donation_account FROM members WHERE donation_account IS NOT NULL AND donation_account <> ''"
+        ).fetchall()
+        conn.close()
+        self.assertEqual(len(rows), 0)
+
+        members = self.client.get("/api/members").json()["members"]
+        self.assertTrue(all(not (m.get("donation_account") or "").strip() for m in members))
+        detail = self.client.get(f"/api/members/{members[0]['id']}").json()
+        self.assertEqual((detail.get("donation_account") or "").strip(), "")
+
+        # 5) 후원계좌가 없을 때 UI는 복사 버튼 대신 선관위 안내를 노출
+        with open(os.path.join(CURRENT_DIR, "static", "app.js"), encoding="utf-8") as fp:
+            app_js = fp.read()
+        self.assertIn("function renderCardDonationButton", app_js)
+        self.assertIn("https://give.go.kr", app_js)
+
+        print("[PASS] v3.5 security: 기본 관리자 비밀번호/세션 위조 차단 & 가짜 후원계좌 0건 verified")
+
+    def test_15_legacy_default_admin_row_gets_disabled(self):
+        """구 기본 비밀번호 해시가 남은 DB를 열면 관리자 계정이 자동 비활성화되고, 환경변수 설정 시 새 비밀번호로 활성화"""
+        import sqlite3
+
+        env_backup = os.environ.pop("POLIRANK_ADMIN_PASSWORD", None)
+        legacy_db = os.path.join(self._tmp_dir.name, "legacy_admin.db")
+        db_path_backup = db_module.DB_PATH
+        try:
+            db_module.DB_PATH = legacy_db
+            conn = sqlite3.connect(legacy_db)
+            conn.row_factory = sqlite3.Row
+            conn.execute(
+                "CREATE TABLE office_accounts (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL,"
+                " password_hash TEXT NOT NULL, member_id TEXT, office_name TEXT NOT NULL, role TEXT DEFAULT 'office',"
+                " is_active INTEGER DEFAULT 1, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+            )
+            conn.execute(
+                "INSERT INTO office_accounts (username, password_hash, member_id, office_name, role, is_active)"
+                " VALUES ('admin', ?, NULL, 'PoliRank 운영본부', 'admin', 1)",
+                (db_module.hash_password("polirank_admin_2026!"),),
+            )
+            conn.commit()
+            conn.close()
+
+            # 환경변수 미설정 → 구 기본 비밀번호 계정 자동 비활성화
+            init_db()
+            conn = sqlite3.connect(legacy_db)
+            conn.row_factory = sqlite3.Row
+            row = conn.execute("SELECT is_active FROM office_accounts WHERE username = 'admin'").fetchone()
+            conn.close()
+            self.assertEqual(int(row["is_active"]), 0)
+            self.assertIsNone(db_module.authenticate_office_account("admin", "polirank_admin_2026!"))
+
+            # 환경변수 설정 → 새 비밀번호로 재활성화
+            os.environ["POLIRANK_ADMIN_PASSWORD"] = "brand_new_admin_pw_v35"
+            init_db()
+            self.assertIsNotNone(db_module.authenticate_office_account("admin", "brand_new_admin_pw_v35"))
+            self.assertIsNone(db_module.authenticate_office_account("admin", "polirank_admin_2026!"))
+        finally:
+            db_module.DB_PATH = db_path_backup
+            os.environ.pop("POLIRANK_ADMIN_PASSWORD", None)
+            if env_backup is not None:
+                os.environ["POLIRANK_ADMIN_PASSWORD"] = env_backup
+
+        print("[PASS] v3.5 legacy default admin account disable/reactivate verified")
+
+    def test_16_synthetic_donation_accounts_scrubbed_on_existing_db(self):
+        """기존 DB에 남아 있던 임시(가짜) 후원계좌가 init_db 마이그레이션에서 모두 비워지는지 검증"""
+        import shutil
+        import sqlite3
+
+        repo_db = os.path.join(CURRENT_DIR, "polirank.db")
+        if not os.path.exists(repo_db):
+            self.skipTest("polirank.db 없음")
+        legacy_copy = os.path.join(self._tmp_dir.name, "legacy_donation.db")
+        shutil.copy2(repo_db, legacy_copy)
+        db_path_backup = db_module.DB_PATH
+        try:
+            db_module.DB_PATH = legacy_copy
+            # 마이그레이션 전 상태 확인 (저장소 DB에는 가짜 계좌가 들어 있습니다)
+            conn = sqlite3.connect(legacy_copy)
+            before = conn.execute(
+                "SELECT COUNT(*) FROM members WHERE donation_account IS NOT NULL AND donation_account <> ''"
+            ).fetchone()[0]
+            conn.close()
+
+            init_db()
+
+            conn = sqlite3.connect(legacy_copy)
+            after_rows = conn.execute(
+                "SELECT name, donation_account FROM members WHERE donation_account IS NOT NULL AND donation_account <> ''"
+            ).fetchall()
+            conn.close()
+            self.assertEqual(after_rows, [])
+            if before:
+                print(f"[PASS] v3.5 donation scrub: 기존 DB의 가짜 후원계좌 {before}건을 빈 값으로 정리")
+            else:
+                print("[PASS] v3.5 donation scrub: 정리 대상 없음(이미 깨끗한 DB) verified")
+        finally:
+            db_module.DB_PATH = db_path_backup
 
 
 if __name__ == "__main__":

@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import json
 import os
+import secrets
 import sys
 import time
 import uuid
@@ -126,12 +127,33 @@ def _set_vid_cookie(resp: Response, vid: str, request: Request) -> None:
     )
 
 
+_EPHEMERAL_SESSION_SECRET: Optional[str] = None
+
+
 def _get_signing_secret() -> str:
-    env_secret = os.environ.get("POLIRANK_SECRET_KEY")
+    """세션 서명키를 결정합니다.
+
+    v3.5 보안 수정: 하드코딩된 기본 비밀번호에서 키를 파생하던 동작을 제거했습니다.
+    기존에는 공개 저장소의 상수만으로 서명키를 계산할 수 있어 누구나 role=admin 세션
+    쿠키를 위조할 수 있었습니다. 이제 키는 (1) POLIRANK_SECRET_KEY, (2) POLIRANK_ADMIN_PASSWORD
+    중 하나로만 만들어지고, 둘 다 없으면 프로세스별 난수를 사용해 위조가 불가능합니다.
+    """
+    env_secret = (os.environ.get("POLIRANK_SECRET_KEY") or "").strip()
     if env_secret:
         return env_secret
-    seed_pw = os.environ.get("POLIRANK_ADMIN_PASSWORD") or "polirank_admin_2026!"
-    return hashlib.sha256(f"{seed_pw}|polirank-v33-session-secret".encode("utf-8")).hexdigest()
+    seed_pw = (os.environ.get("POLIRANK_ADMIN_PASSWORD") or "").strip()
+    if seed_pw:
+        return hashlib.sha256(f"{seed_pw}|polirank-v35-session-secret".encode("utf-8")).hexdigest()
+    global _EPHEMERAL_SESSION_SECRET
+    if _EPHEMERAL_SESSION_SECRET is None:
+        _EPHEMERAL_SESSION_SECRET = secrets.token_hex(32)
+        print(
+            "[SECURITY WARNING] POLIRANK_SECRET_KEY / POLIRANK_ADMIN_PASSWORD 미설정: "
+            "프로세스별 임시 세션키를 사용합니다(재시작 시 기존 세션 만료). "
+            "운영 배포에서는 두 환경변수 중 하나를 반드시 설정하세요.",
+            file=sys.stderr,
+        )
+    return _EPHEMERAL_SESSION_SECRET
 
 
 def _create_office_session_token(account: dict) -> str:
@@ -274,8 +296,16 @@ import seed_data as polirank_seed
 seed = polirank_seed.seed
 get_connection = polirank_db.get_connection
 
-@app.on_event("startup")
-def startup_event():
+# v3.5: 서버리스(Vercel) 환경에서는 startup 이벤트가 보장되지 않을 수 있어,
+# import 시점에도 스키마/보안 마이그레이션(가짜 후원계좌 정리, 기본 관리자 비활성화)을 수행합니다.
+try:
+    init_db()
+except Exception as _init_exc:  # DB가 읽기 전용이거나 잠긴 경우에도 앱은 뜨도록 합니다.
+    print(f"[WARN] import 시점 init_db 실패(무시하고 기동): {_init_exc}", file=sys.stderr)
+
+
+@app.on_event("startup")
+def startup_event():
     init_db()
     conn = get_connection()
     c = conn.cursor()
