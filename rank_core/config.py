@@ -1,6 +1,33 @@
 import json
+import os
 from dataclasses import dataclass, field, asdict
 from typing import Dict, Any, Optional
+
+
+# ── 개발자 후원(공통) ────────────────────────────────────────────────────────
+# 진호 님이 만드는 **모든 사이트**에 동일하게 적용되는 후원 채널.
+# 2026-11-16 등록: Buy Me a Coffee — https://buymeacoffee.com/javaleo
+#   · 한 곳만 고치면 polirank·krank·앞으로 만드는 사이트 전부에 반영된다.
+#   · 환경변수 BUYMEACOFFEE_URL 로 덮어쓸 수 있다(배포 환경별 계정 분리 대비).
+DEFAULT_BUYMEACOFFEE_URL = "https://buymeacoffee.com/javaleo"
+DEFAULT_SUPPORT_MESSAGE = (
+    "이 사이트는 정파와 자본으로부터 독립된 1인 개발자가 운영합니다. "
+    "서버 유지비와 데이터 파이프라인 고도화를 위해 커피 한 잔을 응원해 주세요!"
+)
+
+
+def get_buymeacoffee_url() -> str:
+    """공통 후원 링크 — 모든 사이트가 이 함수 하나만 부르면 된다."""
+    return (os.environ.get("BUYMEACOFFEE_URL") or DEFAULT_BUYMEACOFFEE_URL).strip()
+
+
+def get_support_links() -> Dict[str, str]:
+    """후원 링크 묶음(사이트 공통 응답 스키마)."""
+    return {
+        "buymeacoffee": get_buymeacoffee_url(),
+        "support_message": (os.environ.get("SUPPORT_MESSAGE") or DEFAULT_SUPPORT_MESSAGE).strip(),
+    }
+
 
 @dataclass
 class ScoringWeightConfig:

@@ -2051,6 +2051,17 @@ async function openDevSupportModal() {
         };
         const tossUrl = safeUrl(data.dev_toss_link);
         const kakaoUrl = safeUrl(data.dev_kakaopay_link);
+        const bmcUrl = safeUrl(data.dev_buymeacoffee_url);
+        const bmcBtn = document.getElementById('dev-support-bmc-btn');
+
+        if (bmcBtn) {
+            if (bmcUrl) {
+                bmcBtn.href = bmcUrl;
+                bmcBtn.classList.remove('hidden');
+            } else {
+                bmcBtn.classList.add('hidden');
+            }
+        }
 
         if (tossBtn) {
             if (tossUrl) {
@@ -2069,10 +2080,10 @@ async function openDevSupportModal() {
             }
         }
         if (linksBox) {
-            linksBox.classList.toggle('hidden', !tossUrl && !kakaoUrl);
+            linksBox.classList.toggle('hidden', !tossUrl && !kakaoUrl && !bmcUrl);
         }
         if (emptyBox) {
-            emptyBox.classList.toggle('hidden', Boolean(cachedDevBankInfo || tossUrl || kakaoUrl));
+            emptyBox.classList.toggle('hidden', Boolean(cachedDevBankInfo || tossUrl || kakaoUrl || bmcUrl));
         }
     } catch (err) {
         console.error('Failed to load dev support info', err);

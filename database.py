@@ -902,7 +902,11 @@ DEFAULT_DEV_MESSAGE = (
 
 
 def get_dev_support_settings() -> Dict[str, Any]:
-    """개발자 후원 계좌/송금링크/안내 문구 조회"""
+    """개발자 후원 계좌/송금링크/안내 문구 조회
+
+    2026-11-16: Buy Me a Coffee 공통 링크를 rank_core 에서 가져와 함께 내려준다.
+    모든 사이트가 같은 링크를 쓰므로 여기(공통 코어)만 고치면 전부 반영된다.
+    """
     conn = get_connection()
     cursor = conn.cursor()
     try:
@@ -914,12 +918,24 @@ def get_dev_support_settings() -> Dict[str, Any]:
         toss_link = rows.get("dev_toss_link") or os.environ.get("DEV_TOSS_LINK", "")
         kakaopay_link = rows.get("dev_kakaopay_link") or os.environ.get("DEV_KAKAOPAY_LINK", "")
         dev_msg = rows.get("dev_message") or DEFAULT_DEV_MESSAGE
+        # 공통 후원 링크(Buy Me a Coffee) — rank_core 단일 소스
+        bmc_url = ""
+        support_msg = dev_msg
+        try:
+            from rank_core import get_buymeacoffee_url, get_support_links
+            bmc_url = get_buymeacoffee_url()
+            support_msg = dev_msg or get_support_links().get("support_message", "")
+        except Exception:
+            bmc_url = os.environ.get("BUYMEACOFFEE_URL", "")
         return {
             "dev_bank_info": bank_info,
             "dev_toss_link": toss_link,
             "dev_kakaopay_link": kakaopay_link,
-            "dev_message": dev_msg,
-            "is_configured": bool(bank_info.strip() or toss_link.strip() or kakaopay_link.strip()),
+            "dev_message": support_msg,
+            "dev_buymeacoffee_url": bmc_url,
+            "is_configured": bool(
+                bank_info.strip() or toss_link.strip() or kakaopay_link.strip() or bmc_url.strip()
+            ),
         }
     finally:
         conn.close()

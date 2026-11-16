@@ -21,6 +21,90 @@ import math
 from typing import Dict, Any, Optional
 
 
+# ── 공통 통계 모듈 로드 (rank_core/rank_stats.py) ─────────────────────────
+#   사본/원본 어느 경로에서 실행돼도 찾도록 보강한다(2026-11-16).
+from pathlib import Path as _Path
+import sys as _sys
+
+_HERE = _Path(__file__).resolve().parent
+for _cand in (_HERE / "rank_core", _HERE.parent / "rank_core"):
+    if (_cand / "rank_stats.py").is_file():
+        if str(_cand) not in _sys.path:
+            _sys.path.insert(0, str(_cand))
+        break
+
+try:
+    import rank_stats as _rs
+except Exception:  # 모듈이 없어도 기존 점수 계산은 계속 동작해야 한다
+    _rs = None
+
+
+def _confidence_label(n: int) -> str:
+    """표본 크기 기반 신뢰도 라벨 (low <5 / mid 5~19 / high 20+)."""
+    if _rs is not None:
+        return _rs.confidence_label(n)
+    return "low" if n < 5 else ("mid" if n < 20 else "high")
+
+
+def _ratio_ci(success: float, attempts: float) -> tuple:
+    """비율 지표의 95% 신뢰구간(0~100 스케일)."""
+    a = max(0.0, float(attempts or 0))
+    s = max(0.0, float(success or 0))
+    if _rs is not None:
+        lo, hi = _rs.wilson_interval(int(round(s)), int(round(a)))
+        return (lo * 100.0, hi * 100.0)
+    if a <= 0:
+        return (0.0, 100.0)
+    p = min(1.0, s / a)
+    return (max(0.0, (p - 0.1) * 100.0), min(100.0, (p + 0.1) * 100.0))
+
+
+def calculate_tier_by_rank(rank: int, total: int) -> str:
+    """분포 기반 Tier — 상위 10% S+, 다음 20% S, 다음 30% A, 다음 30% B, 하위 10% C.
+
+    절대 임계값(88/80/70/60)은 분포가 낮은 회차에서 전원 C가 될 수 있어
+    순위 기반 등급을 함께 제공한다(레드팀 2026-11-16).
+    """
+    if _rs is not None:
+        return _rs.tier_by_rank(rank, total)
+    if total <= 0:
+        return "C"
+    r = rank / total
+    if r <= 0.10:
+        return "S+"
+    if r <= 0.30:
+        return "S"
+    if r <= 0.60:
+        return "A"
+    if r <= 0.90:
+        return "B"
+    return "C"
+
+
+def calculate_percentile(rank: int, total: int) -> float:
+    """순위 기반 백분위 (1위 → 100에 가까움)."""
+    if _rs is not None:
+        return _rs.percentile_from_rank(rank, total)
+    if total <= 0:
+        return 0.0
+    return round((1.0 - (rank - 0.5) / total) * 100.0, 1)
+
+
+# 레드팀 지적: 뉴스·응원 등 실데이터가 0인 지표는 공개 목록에서 노출하지 않는다.
+#   값이 실제로 채워지면 자동으로 다시 노출된다(0이 아니게 되면).
+PARTICIPATION_METRICS = ("fandom_score", "controversy_score", "hidden_gem_score")
+
+
+def strip_zero_participation_metrics(record: Dict[str, Any]) -> Dict[str, Any]:
+    """참여 지표가 0이면 응답에서 제거 — '0건'을 성과처럼 보이지 않게 한다."""
+    out = dict(record)
+    for key in PARTICIPATION_METRICS:
+        if key in out and not out[key]:
+            out.pop(key, None)
+    return out
+
+
+
 SCORING_METHODOLOGY = {
     "version": "3.0",
     "title": "PoliRank v3.0 — 헌법적 본질과 입법 품질 중심의 6대 축 · 14대 팩트 지표",
@@ -207,6 +291,13 @@ def calculate_member_scores(member_data: Dict[str, Any]) -> Dict[str, Any]:
         "total_score": total_score,
         "tier": tier,
         "tier_title": tier_title,
+        # ── 레드팀 대응(2026-11-16): 신뢰도·표본 표시 ────────────────────────
+        # 표본이 작은 비율 지표는 후행 평균으로 보정하고 95% 신뢰구간을 함께 낸다.
+        "sample_size": int(bills_proposed),
+        "confidence": _confidence_label(int(bills_proposed)),
+        "ci_low": round(_ratio_ci(effective_passed, bills_proposed)[0], 1),
+        "ci_high": round(_ratio_ci(effective_passed, bills_proposed)[1], 1),
+        "scoring_version": SCORING_METHODOLOGY["version"],
     }
 
 

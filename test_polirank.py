@@ -588,11 +588,17 @@ class TestPoliRankV3(unittest.TestCase):
 
     def test_11_dev_support_and_user_feedback_workflow(self):
         """v3.4 개발자 후원 설정/조회, 유저 의견 보내기(400/429 포함) 및 관리자 전용 열람(401/403 차단) 검증"""
-        # 1) 초기 dev-support 조회 (미설정 상태)
+        # 1) 초기 dev-support 조회 (계좌/송금 미설정이어도 공통 후원링크는 항상 제공)
         res_dev0 = self.client.get("/api/dev-support")
         self.assertEqual(res_dev0.status_code, 200)
-        self.assertFalse(res_dev0.json()["is_configured"])
-        self.assertTrue(len(res_dev0.json()["dev_message"]) > 10)
+        body0 = res_dev0.json()
+        # 2026-11-16: Buy Me a Coffee 공통 링크가 기본 제공되므로 is_configured 는 True
+        self.assertTrue(body0["dev_buymeacoffee_url"].startswith("https://"))
+        self.assertEqual(body0["dev_bank_info"], "")
+        self.assertEqual(body0["dev_toss_link"], "")
+        self.assertEqual(body0["dev_kakaopay_link"], "")
+        self.assertTrue(body0["is_configured"])
+        self.assertTrue(len(body0["dev_message"]) > 10)
 
         # 2) 비관리자 접근 차단 (401 / 403)
         self.assertEqual(self.client.get("/api/admin/feedbacks").status_code, 401)

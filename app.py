@@ -328,14 +328,55 @@ def list_members(
 ):
     """국회의원 랭킹 목록 조회 (v3.1 6대 핵심 축 & 재미·화제성 랭킹)"""
     members = get_all_members(party=party, sort_by=sort_by, search=search)
+
+    # ── 레드팀 대응(2026-11-16) ────────────────────────────────────────────
+    # 1) 백분위·분포 Tier 를 함께 내려 '몇 등인지'를 절대점수와 분리해 보여준다.
+    # 2) 참여 지표(응원·논란·진주)가 0이면 목록 응답에서 제거한다.
+    total_n = len(members)
+    ordered = sorted(members, key=lambda x: -(x.get("total_score") or 0))
+    rank_map, prev_score, prev_rank = {}, None, 0
+    for idx, mm in enumerate(ordered, start=1):
+        sc = mm.get("total_score")
+        if prev_score is not None and sc == prev_score:
+            rank_map[mm["id"]] = prev_rank
+        else:
+            rank_map[mm["id"]] = idx
+            prev_rank, prev_score = idx, sc
+
+    cleaned = []
     for m in members:
         m["avatar_url"] = f"/api/members/{m['id']}/avatar.svg"
+        rk = rank_map.get(m["id"], 0)
+        m["rank"] = rk
+        m["score_percentile"] = polirank_scoring.calculate_percentile(rk, total_n) if rk else 0.0
+        m["tier_distribution"] = (polirank_scoring.calculate_tier_by_rank(rk, total_n)
+                                  if rk else m.get("tier"))
+        # 표본·신뢰구간 폭 기반 평가 라벨 (레드팀 P2)
+        ci_lo, ci_hi = m.get("ci_low"), m.get("ci_high")
+        wide = (ci_hi - ci_lo) > 20 if (ci_lo is not None and ci_hi is not None) else False
+        m["assessment_label"] = ("데이터 부족" if wide or (m.get("confidence") == "low")
+                                 else "정량 평가")
+        m["scoring_version"] = polirank_scoring.SCORING_METHODOLOGY["version"]
+        # 신규 신뢰도 필드는 DB 저장값에 없으므로 None 이면 응답에서 제거한다.
+        # (0이나 빈 문자열로 채우면 '신뢰도 0'으로 오독된다)
+        for _k in ("ci_low", "ci_high", "sample_size", "confidence"):
+            if m.get(_k) is None:
+                m.pop(_k, None)
+        # 참여 지표(응원·논란·진주)는 '재미 랭킹' 정렬 축이라 제거하지 않는다.
+        # 다만 값이 0이면 UI가 '0건'을 성과처럼 보여주지 않도록 participation_available 로 알린다.
+        m["participation_available"] = bool(
+            (m.get("fandom_score") or 0) or (m.get("controversy_score") or 0)
+            or (m.get("hidden_gem_score") or 0)
+        )
+        cleaned.append(m)
+
     return {
         "status": "success",
-        "count": len(members),
+        "count": len(cleaned),
         "sort_by": sort_by,
         "party_filter": party or "all",
-        "members": members
+        "scoring_version": polirank_scoring.SCORING_METHODOLOGY["version"],
+        "members": cleaned
     }
 
 @app.get("/api/members/{member_id}")
