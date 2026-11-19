@@ -6,12 +6,37 @@ import os
 import json
 import hashlib
 import hmac
+import re
 import secrets
 from collections import Counter
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "polirank.db")
+
+# v3.5 보안 수정: 공개 저장소에 노출된 구 기본 관리자 비밀번호 (더 이상 생성/사용하지 않음)
+LEGACY_DEFAULT_ADMIN_PASSWORD = "polirank_admin_2026!"
+
+# v3.5 보안 수정: seed_data.py가 MD5로 만들어 넣던 임시(가짜) 의원 후원계좌 패턴.
+# 공식 후원계좌는 공개 데이터가 아니므로, 이 패턴에 해당하는 값은 모두 비웁니다.
+_SYNTHETIC_DONATION_ACCOUNT_RE = re.compile(
+    r"^\S+ \d{3}-\d{4}-\d{4}-\d{2} \(국회의원 .+ 후원회\)$"
+)
+
+
+def _scrub_synthetic_donation_accounts(cursor) -> int:
+    """기존 DB에 남아 있는 임시(가짜) 후원계좌를 빈 값으로 정리합니다.
+
+    시민이 존재하지 않는 후원계좌로 실제 송금을 하는 사고를 막기 위한 마이그레이션입니다.
+    """
+    cursor.execute("SELECT id, donation_account FROM members WHERE donation_account IS NOT NULL AND donation_account <> ''")
+    targets = [
+        row["id"] for row in cursor.fetchall()
+        if _SYNTHETIC_DONATION_ACCOUNT_RE.match((row["donation_account"] or "").strip())
+    ]
+    for member_id in targets:
+        cursor.execute("UPDATE members SET donation_account = '' WHERE id = ?", (member_id,))
+    return len(targets)
 
 
 def hash_password(password: str, iterations: int = 120000) -> str:
@@ -245,20 +270,43 @@ def init_db():
             (s_key, s_val),
         )
 
-    # 초기 운영자 계정 자동 부트스트랩 (없는 경우 생성, 환경변수 지정 시 해시 동기화)
-    env_admin_pw = os.environ.get("POLIRANK_ADMIN_PASSWORD")
-    cursor.execute("SELECT id, password_hash FROM office_accounts WHERE role = 'admin' LIMIT 1")
+    # 기존 DB의 임시(가짜) 후원계좌 정리 (v3.5)
+    scrubbed = _scrub_synthetic_donation_accounts(cursor)
+    if scrubbed:
+        print(f"[SECURITY] 임시 생성된 후원계좌 {scrubbed}건을 빈 값으로 정리했습니다.")
+
+    # 초기 운영자 계정 부트스트랩 (v3.5: 하드코딩 기본 비밀번호 제거)
+    # - POLIRANK_ADMIN_PASSWORD가 설정된 경우에만 계정을 만들거나 해시를 동기화합니다.
+    # - 설정이 없으면 관리자 계정을 만들지 않습니다(기본 비밀번호 없음 = fail-closed).
+    # - 설정이 없는데 DB에 구 기본 비밀번호가 남아 있으면 계정을 비활성화합니다.
+    env_admin_pw = (os.environ.get("POLIRANK_ADMIN_PASSWORD") or "").strip()
+    cursor.execute("SELECT id, password_hash, is_active FROM office_accounts WHERE role = 'admin' LIMIT 1")
     admin_row = cursor.fetchone()
     if not admin_row:
-        initial_pw = env_admin_pw or "polirank_admin_2026!"
-        cursor.execute("""
-            INSERT INTO office_accounts (username, password_hash, member_id, office_name, role, is_active)
-            VALUES ('admin', ?, NULL, 'PoliRank 운영본부', 'admin', 1)
-        """, (hash_password(initial_pw),))
-    elif env_admin_pw and not verify_password(env_admin_pw, admin_row["password_hash"]):
+        if env_admin_pw:
+            cursor.execute("""
+                INSERT INTO office_accounts (username, password_hash, member_id, office_name, role, is_active)
+                VALUES ('admin', ?, NULL, 'PoliRank 운영본부', 'admin', 1)
+            """, (hash_password(env_admin_pw),))
+        else:
+            print(
+                "[SECURITY] POLIRANK_ADMIN_PASSWORD 미설정: 관리자 계정을 생성하지 않았습니다. "
+                "운영자 로그인이 필요하면 환경변수를 설정한 뒤 재배포하세요."
+            )
+    elif env_admin_pw:
+        if not verify_password(env_admin_pw, admin_row["password_hash"]) or not admin_row["is_active"]:
+            cursor.execute(
+                "UPDATE office_accounts SET password_hash = ?, is_active = 1 WHERE id = ?",
+                (hash_password(env_admin_pw), admin_row["id"]),
+            )
+    elif verify_password(LEGACY_DEFAULT_ADMIN_PASSWORD, admin_row["password_hash"]):
         cursor.execute(
-            "UPDATE office_accounts SET password_hash = ?, is_active = 1 WHERE id = ?",
-            (hash_password(env_admin_pw), admin_row["id"]),
+            "UPDATE office_accounts SET is_active = 0 WHERE id = ?",
+            (admin_row["id"],),
+        )
+        print(
+            "[SECURITY] 공개된 구 기본 비밀번호를 쓰는 관리자 계정을 비활성화했습니다. "
+            "POLIRANK_ADMIN_PASSWORD를 설정하면 새 비밀번호로 다시 활성화됩니다."
         )
     
     conn.commit()
