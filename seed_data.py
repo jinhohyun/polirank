@@ -1,7 +1,6 @@
 """
 PoliRank - 국회의원 실데이터 초기 시딩 및 6대 정량 지표/재미 요소 적재 스크립트 (299인 풀버전 지원)
 """
-import hashlib
 import os
 import json
 import random
@@ -387,12 +386,11 @@ def seed(preserve_user_data: bool = False):
         # 본질 6대 축 점수 계산 (재미 지표와 완전 격리)
         scores = calculate_member_scores(m)
 
-        # 결정론적 공식 후원계좌 (MD5 기반)
-        digest_int = int(hashlib.md5(m["id"].encode("utf-8")).hexdigest()[:8], 16)
-        bank_names = ["농협은행", "국민은행", "신한은행", "하나은행", "우리은행"]
-        bank = bank_names[digest_int % len(bank_names)]
-        acc_num = f"{301 + (digest_int % 90):03d}-{1000 + (digest_int % 8999):04d}-{1000 + ((digest_int >> 8) % 8999):04d}-{11 + (digest_int % 88):02d}"
-        donation_account = f"{bank} {acc_num} (국회의원 {m['name']} 후원회)"
+        # v3.5 보안 수정: 의원 후원계좌를 임의 생성하지 않습니다.
+        # 공식 후원계좌는 공개 데이터가 아니며, 가짜 계좌를 "공식 후원계좌"로 노출하면
+        # 시민이 실제 송금을 하는 사고로 이어질 수 있습니다. UI는 선관위 후원센터
+        # (give.go.kr) 안내로 대체합니다.
+        donation_account = ""
 
         # v3.2: 실제 유저 응원만 보존하고 초기 응원수는 전부 0으로 시작 (가짜 응원수 제거)
         cheer_count = int(existing_cheers.get(m["id"], 0)) if preserve_user_data else 0

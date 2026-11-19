@@ -794,9 +794,7 @@ function createMemberCardElement(member, displayRank, rankText, isTied) {
         <!-- Action Buttons -->
         <div class="pt-2 border-t border-slate-200/60 dark:border-slate-800 flex items-center justify-between gap-1.5">
             ${renderCardCheerButton(member.id, member.cheer_count)}
-            <button onclick="copyAccountDirect(event, '${member.donation_account}')" title="공식 후원계좌 1초 복사" class="py-1.5 px-2.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all">
-                <i class="fa-solid fa-hand-holding-dollar text-amber-500"></i>
-            </button>
+            ${renderCardDonationButton(member.donation_account)}
             <button onclick="openModal('${member.id}')" class="py-1.5 px-3 rounded-xl text-xs font-bold bg-sky-600 hover:bg-sky-500 text-white transition-all shadow-xs flex items-center space-x-1">
                 <span>분석</span>
                 <i class="fa-solid fa-chevron-right text-[10px]"></i>
@@ -997,6 +995,19 @@ function copyAccountDirect(e, accountString) {
     });
 }
 
+// v3.5: 공식 후원계좌를 확인한 경우에만 복사 버튼을 노출하고,
+// 없으면 존재하지 않는 계좌를 보여주지 않고 선관위 후원센터 안내 링크로 대체합니다.
+function renderCardDonationButton(donationAccount) {
+    const account = (donationAccount || '').trim();
+    if (!account) {
+        return `<a href="https://give.go.kr" target="_blank" rel="noopener noreferrer" title="선관위 정치후원금센터에서 공식 후원 안내 확인" class="py-1.5 px-2.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all"><i class="fa-solid fa-hand-holding-dollar text-amber-500"></i></a>`;
+    }
+    const safeAccount = String(account).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/&/g, '&amp;').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+    return `<button onclick="copyAccountDirect(event, '${safeAccount}')" title="공식 후원계좌 1초 복사" class="py-1.5 px-2.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all">
+                <i class="fa-solid fa-hand-holding-dollar text-amber-500"></i>
+            </button>`;
+}
+
 function copyDonationAccount() {
     if (!currentMember || !currentMember.donation_account) return;
     navigator.clipboard.writeText(currentMember.donation_account).then(() => {
@@ -1084,7 +1095,12 @@ async function openModal(memberId) {
         renderModalNews(member);
         renderModalStaffInfo(member);
 
-        document.getElementById('modal-donation-account').textContent = member.donation_account || '선관위 정치후원금센터 참조';
+        const modalDonationAccount = (member.donation_account || '').trim();
+        document.getElementById('modal-donation-account').textContent = modalDonationAccount || '선관위 정치후원금센터에서 확인';
+        const modalCopyBtn = document.getElementById('modal-copy-account-btn');
+        if (modalCopyBtn) {
+            modalCopyBtn.classList.toggle('hidden', !modalDonationAccount);
+        }
         document.getElementById('modal-cheer-count').textContent = member.cheer_count;
         updateCheerButtonsUI(member.id);
 
