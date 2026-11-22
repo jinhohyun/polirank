@@ -387,6 +387,13 @@ function setupEventListeners() {
             }
         }
     });
+
+    // Delegation handler for copy donation account (RT-3: DOM XSS prevention)
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-copy-account]');
+        if (!btn) return;
+        copyAccountDirect(e, btn.getAttribute('data-copy-account') || '');
+    });
 }
 
 // Reset Filters to Default
@@ -985,27 +992,26 @@ function spawnFloatingHeart(x, y) {
     }, 850);
 }
 
-// Direct Copy Donation Account
-function copyAccountDirect(e, accountString) {
-    e.stopPropagation();
-    navigator.clipboard.writeText(accountString).then(() => {
-        showToast(`📋 후원계좌가 복사되었습니다!\n${accountString}`, 'success');
-    }).catch(() => {
-        showToast('클립보드 복사에 실패했습니다.', 'error');
-    });
-}
-
-// v3.5: 공식 후원계좌를 확인한 경우에만 복사 버튼을 노출하고,
-// 없으면 존재하지 않는 계좌를 보여주지 않고 선관위 후원센터 안내 링크로 대체합니다.
 function renderCardDonationButton(donationAccount) {
     const account = (donationAccount || '').trim();
     if (!account) {
         return `<a href="https://give.go.kr" target="_blank" rel="noopener noreferrer" title="선관위 정치후원금센터에서 공식 후원 안내 확인" class="py-1.5 px-2.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all"><i class="fa-solid fa-hand-holding-dollar text-amber-500"></i></a>`;
     }
-    const safeAccount = String(account).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/&/g, '&amp;').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
-    return `<button onclick="copyAccountDirect(event, '${safeAccount}')" title="공식 후원계좌 1초 복사" class="py-1.5 px-2.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all">
+    return `<button type="button" data-copy-account="${escapeHtml(account)}" title="공식 후원계좌 1초 복사" class="py-1.5 px-2.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all">
                 <i class="fa-solid fa-hand-holding-dollar text-amber-500"></i>
             </button>`;
+}
+
+// Direct Copy Donation Account
+function copyAccountDirect(e, accountString) {
+    if (e && e.stopPropagation) {
+        e.stopPropagation();
+    }
+    navigator.clipboard.writeText(accountString).then(() => {
+        showToast(`📋 후원계좌가 복사되었습니다!\n${accountString}`, 'success');
+    }).catch(() => {
+        showToast('클립보드 복사에 실패했습니다.', 'error');
+    });
 }
 
 function copyDonationAccount() {
@@ -1096,7 +1102,14 @@ async function openModal(memberId) {
         renderModalStaffInfo(member);
 
         const modalDonationAccount = (member.donation_account || '').trim();
-        document.getElementById('modal-donation-account').textContent = modalDonationAccount || '선관위 정치후원금센터에서 확인';
+        const modalAccEl = document.getElementById('modal-donation-account');
+        if (modalAccEl) {
+            if (modalDonationAccount) {
+                modalAccEl.textContent = modalDonationAccount;
+            } else {
+                modalAccEl.innerHTML = '<a href="https://give.go.kr" target="_blank" rel="noopener noreferrer" class="hover:underline">선관위 정치후원금센터에서 확인</a>';
+            }
+        }
         const modalCopyBtn = document.getElementById('modal-copy-account-btn');
         if (modalCopyBtn) {
             modalCopyBtn.classList.toggle('hidden', !modalDonationAccount);
